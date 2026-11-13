@@ -6,7 +6,7 @@
   let status = $state('');
   let statusState = $state('idle');
   let hasSearched = $state(false);
-  let telemetryMessage = $state('network distribution not connected');
+  let telemetryMessage = $state('loading annual internet-use data');
   let inputElement;
 
   const messages = {
@@ -17,9 +17,12 @@
 
   function handleTelemetryChange(event) {
     if (event.state === 'ready') {
-      telemetryMessage = 'Cloudflare Radar · HTTP request share · rolling 24h';
+      const years = event.earliestYear === event.latestYear
+        ? String(event.latestYear)
+        : event.earliestYear + '–' + event.latestYear;
+      telemetryMessage = 'ITU / World Bank WDI · internet use (% of population) · ' + years;
     } else {
-      telemetryMessage = 'network distribution not connected';
+      telemetryMessage = 'internet-use data unavailable';
     }
   }
 
