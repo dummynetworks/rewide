@@ -70,8 +70,8 @@
         ? Math.max(0, Math.min(1, (value - minimum) / range))
         : 1;
       const amount = Math.pow(normalized, 0.82);
-      const low = [15, 15, 15];
-      const high = [120, 120, 120];
+      const low = [38, 38, 38];
+      const high = [178, 178, 178];
       const channels = low.map((channel, index) =>
         Math.round(channel + ((high[index] - channel) * amount))
       );
@@ -93,7 +93,7 @@
       );
       textureContext.lineJoin = 'round';
       textureContext.lineWidth = 0.65;
-      textureContext.strokeStyle = 'rgba(150, 150, 150, 0.12)';
+      textureContext.strokeStyle = 'rgba(175, 175, 175, 0.16)';
 
       for (const feature of geoJson.features ?? []) {
         const properties = feature.properties ?? {};
@@ -101,7 +101,7 @@
         const value = distribution.get(code);
         const fill = Number.isFinite(value)
           ? colorForInternetUse(value, minimum, maximum)
-          : '#242424';
+          : '#303030';
 
         textureContext.fillStyle = fill;
 
@@ -157,15 +157,15 @@
           const isOcean = (blue - red) > 36;
           const normalizedValue = Math.max(
             0,
-            Math.min(1, (brightness - 15) / 105),
+            Math.min(1, (brightness - 38) / 140),
           );
           const radius = isOcean
-            ? 1.55
-            : 1.45 + (normalizedValue * 2.25);
+            ? 1.8
+            : 1.75 + (normalizedValue * 2.05);
           const centerX = (x + 0.5) * spacing;
           const centerY = (y + 0.5) * spacing;
 
-          const oceanGray = Math.max(15, Math.round(brightness * 0.62));
+          const oceanGray = Math.max(38, Math.min(78, Math.round(brightness * 1.55)));
           const dotColor = isOcean
             ? 'rgb(' + oceanGray + ',' + oceanGray + ',' + oceanGray + ')'
             : 'rgb(' + red + ',' + green + ',' + blue + ')';
