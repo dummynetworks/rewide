@@ -29,9 +29,9 @@ The World Bank Indicators API is public and does not require an API key. The end
 - World Bank / ITU annual internet-use indicator mapped by ISO-3 country code.
 - Query-string navigation and browser history support.
 - `/` focuses search; `Escape` clears the query.
-- `GET /api/search?q=<query>` request validation.
-- Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real search retrieval service and index are connected.
-- No fabricated search results or fabricated internet-use data.
+- `GET /api/search?q=<query>` retrieves up to 10 documents from the shared D1 FTS5 index.
+- Search results are rendered in the home-page interface.
+- Search binding absence is reported explicitly as `503 SEARCH_BACKEND_UNAVAILABLE`.
 
 ## Requirements
 
