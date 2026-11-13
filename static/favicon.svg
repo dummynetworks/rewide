@@ -1,10 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <radialGradient id="gray" cx="32%" cy="27%" r="74%">
-      <stop offset="0" stop-color="#d8d8d8"/>
-      <stop offset="0.48" stop-color="#929292"/>
-      <stop offset="1" stop-color="#3a3a3a"/>
-    </radialGradient>
+    <linearGradient id="gray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3a3a"/>
+      <stop offset="1" stop-color="#d8d8d8"/>
+    </linearGradient>
   </defs>
   <rect width="64" height="64" fill="#000"/>
   <circle cx="32" cy="32" r="23" fill="url(#gray)"/>
