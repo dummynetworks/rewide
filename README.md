@@ -10,15 +10,15 @@ The home screen is a full-screen black canvas. A real 3D sphere is rendered with
 
 The geographic texture is drawn from Natural Earth country polygons.
 
-## Network distribution data
+## Internet-use distribution
 
-The optional \`/api/earth\` endpoint reads Cloudflare Radar's HTTP request distribution by country. It requires a Cloudflare Pages secret named \`CLOUDFLARE_RADAR_API_TOKEN\`, created with read access to Radar.
+The `/api/earth` endpoint reads the World Bank World Development Indicators series **IT.NET.USER.ZS — Individuals using the Internet (% of population)**.
 
-The displayed metric is the percentage distribution of HTTP requests observed on Cloudflare's network over a rolling 24-hour window. It is not a measurement of all Internet traffic.
+The indicator defines an internet user as an individual who has used the Internet from any location in the previous three months. It is an **annual country-level statistic**, not live traffic volume. The API requests the most recent non-empty observation available for each country, so the reported year can differ by country.
 
-Cloudflare Radar API data is licensed under **CC BY-NC 4.0**. The optional Radar integration is therefore for non-commercial use only unless separate permission is obtained. When enabled, the interface attributes the data to Cloudflare Radar. Do not enable this data feed for a commercial use case without appropriate licensing.
+The indicator is sourced from the International Telecommunication Union (ITU) and is provided through the World Bank Indicators API. Attribute the source to **International Telecommunication Union (ITU), via World Bank WDI**. The World Bank metadata lists the indicator under **CC BY 4.0**.
 
-Without the secret, the globe still renders its geographic land and ocean structure, but no traffic values are shown or invented.
+The World Bank Indicators API is public and does not require an API key. The endpoint is cached at the edge for one day. When the API is unavailable, the globe keeps its geographic base rendering without inventing data.
 
 ## Current state
 
@@ -26,12 +26,12 @@ Without the secret, the globe still renders its geographic land and ocean struct
 - Three.js/WebGL 3D globe.
 - Canvas 2D post-processing that converts the WebGL output into a dotted grid.
 - Public-domain Natural Earth country geometry.
-- Optional Cloudflare Radar country distribution feed (requires a Pages secret).
+- World Bank / ITU annual internet-use indicator mapped by ISO-3 country code.
 - Query-string navigation and browser history support.
-- \`/\` focuses search; \`Escape\` clears the query.
-- \`GET /api/search?q=<query>\` request validation.
-- Explicit \`503 SEARCH_BACKEND_UNAVAILABLE\` until a real search retrieval service and index are connected.
-- No fabricated search results or fabricated network telemetry.
+- `/` focuses search; `Escape` clears the query.
+- `GET /api/search?q=<query>` request validation.
+- Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real search retrieval service and index are connected.
+- No fabricated search results or fabricated internet-use data.
 
 ## Requirements
 
@@ -40,41 +40,39 @@ Without the secret, the globe still renders its geographic land and ocean struct
 
 ## Development
 
-\`\`\`sh
+```sh
 npm install
 npm run dev
-\`\`\`
+```
 
 ## Build and test
 
-\`\`\`sh
+```sh
 npm run build
 npm test
-\`\`\`
+```
 
 ## Cloudflare Pages
 
 | Setting | Value |
 | --- | --- |
-| Production branch | \`main\` |
+| Production branch | `main` |
 | Framework preset | SvelteKit |
-| Build command | \`npm run build\` |
-| Build output directory | \`.svelte-kit/cloudflare\` |
-| Root directory | \`/\` |
+| Build command | `npm run build` |
+| Build output directory | `.svelte-kit/cloudflare` |
+| Root directory | `/` |
 
-To enable the optional Radar feed, add a Pages secret named \`CLOUDFLARE_RADAR_API_TOKEN\`. The token must have Account > Radar read permission. Do not expose the token to browser code.
-
-The SvelteKit Cloudflare adapter handles route endpoints under \`src/routes\`; the root-level Pages \`functions/\` directory is not used by this adapter.
+The SvelteKit Cloudflare adapter handles route endpoints under `src/routes`; the root-level Pages `functions/` directory is not used by this adapter.
 
 ## Search API
 
-\`GET /api/search?q=<query>\`
+`GET /api/search?q=<query>`
 
 | Status | Meaning |
 | --- | --- |
-| \`200\` | A connected search backend returned a response |
-| \`400\` | Missing, empty, or overlong query |
-| \`503\` | Search backend is not connected |
+| `200` | A connected search backend returned a response |
+| `400` | Missing, empty, or overlong query |
+| `503` | Search backend is not connected |
 
 The intended ranking sequence is:
 
