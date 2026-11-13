@@ -29,9 +29,9 @@ The World Bank Indicators API is public and does not require an API key. The end
 - World Bank / ITU annual internet-use indicator mapped by ISO-3 country code.
 - Query-string navigation and browser history support.
 - `/` focuses search; `Escape` clears the query.
-- `GET /api/search?q=<query>` request validation.
-- Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real search retrieval service and index are connected.
-- No fabricated search results or fabricated internet-use data.
+- `GET /api/search?q=<query>` retrieves up to 10 documents from the shared D1 FTS5 index.
+- Search results are rendered in the home-page interface.
+- Search binding absence is reported explicitly as `503 SEARCH_BACKEND_UNAVAILABLE`.
 
 ## Requirements
 
@@ -68,19 +68,30 @@ The SvelteKit Cloudflare adapter handles route endpoints under `src/routes`; the
 
 `GET /api/search?q=<query>`
 
+The first retrieval milestone queries the D1 FTS5 index maintained by [rewide-machine](https://github.com/dummynetworks/rewide-machine).
+
 | Status | Meaning |
 | --- | --- |
-| `200` | A connected search backend returned a response |
-| `400` | Missing, empty, or overlong query |
-| `503` | Search backend is not connected |
+| `200` | Search completed; `results` contains zero or more indexed documents |
+| `400` | Missing, empty, overlong, or overly complex query |
+| `500` | Search query failed |
+| `503` | The Pages D1 binding is not configured |
 
-The intended ranking sequence is:
+Search currently uses lexical full-text matching: normalized query terms are combined with AND, indexed title and description fields receive higher relevance weight than body text, and at most 10 indexable documents are returned. This is the retrieval foundation, not the final R/Q/B ranking system.
 
-1. **R — Relevance:** Is it relevant?
-2. **Q — Quality:** Is it good?
-3. **B — Balance:** Is the overall result balanced?
+### Cloudflare Pages D1 binding
 
-The crawler is a separate project ([rewide-machine](https://github.com/dummynetworks/rewide-machine)). Crawling, indexing, retrieval, and ranking will be integrated as real services rather than simulated in this frontend.
+The rewide Pages project must read the same D1 database used by the crawler:
+
+| Setting | Value |
+| --- | --- |
+| Binding variable name | `REWIDE_DB` |
+| D1 database | `rewide-machine-db` |
+
+In Cloudflare, open **Workers & Pages → rewide → Settings → Bindings → Add → D1 database**. Set the variable name to `REWIDE_DB`, select the existing `rewide-machine-db` database, save, and redeploy the Pages project. SvelteKit server endpoints access the binding through `platform.env.REWIDE_DB`.
+
+Before connecting the Pages binding, apply the `0003_documents_fts.sql` migration from the `rewide-machine` repository to the remote D1 database. The migration builds the FTS5 index for documents already stored and installs triggers to keep the index synchronized with later document inserts, updates, and deletes.
+
 
 ## Geographic data
 
