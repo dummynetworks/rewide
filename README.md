@@ -2,26 +2,36 @@
 
 Open-web search by dummyNet.
 
-rewide is an open-web search engine. The application is built with SvelteKit and deployed to Cloudflare Pages using the Cloudflare adapter.
+rewide is an open-web search engine built with SvelteKit and deployed to Cloudflare Pages.
 
 ## Interface
 
-The main workspace pairs a slowly rotating, Canvas-rendered dotted Earth with a separate macOS-inspired search window. The interface uses native-style window chrome and restrained desktop surfaces; it does not use Liquid Glass.
+The home screen is a full-screen black canvas. A real 3D sphere is rendered with Three.js/WebGL and slowly rotates. Its WebGL output is sampled and redrawn by a 2D Canvas as a screen-space dotted grid. The search field sits directly on the black surface; it is not wrapped in a window or dashboard panel.
 
-The globe's land mask is generated from Natural Earth 1:110m land polygons. The geographic data is public domain. The dot pattern is a geographic visualization only: live network-usage telemetry is not connected and is not represented by fabricated values.
+The geographic texture is drawn from Natural Earth country polygons.
 
-The globe renderer uses the browser's Canvas 2D API and does not add a 3D rendering dependency.
+## Network distribution data
+
+The optional \`/api/earth\` endpoint reads Cloudflare Radar's HTTP request distribution by country. It requires a Cloudflare Pages secret named \`CLOUDFLARE_RADAR_API_TOKEN\`, created with read access to Radar.
+
+The displayed metric is the percentage distribution of HTTP requests observed on Cloudflare's network over a rolling 24-hour window. It is not a measurement of all Internet traffic.
+
+Cloudflare Radar API data is licensed under **CC BY-NC 4.0**. The optional Radar integration is therefore for non-commercial use only unless separate permission is obtained. When enabled, the interface attributes the data to Cloudflare Radar. Do not enable this data feed for a commercial use case without appropriate licensing.
+
+Without the secret, the globe still renders its geographic land and ocean structure, but no traffic values are shown or invented.
 
 ## Current state
 
-- SvelteKit application shell and split Earth/search workspace.
-- Canvas-based rotating dotted globe, generated from Natural Earth land geometry.
+- SvelteKit application shell and search interface.
+- Three.js/WebGL 3D globe.
+- Canvas 2D post-processing that converts the WebGL output into a dotted grid.
+- Public-domain Natural Earth country geometry.
+- Optional Cloudflare Radar country distribution feed (requires a Pages secret).
 - Query-string navigation and browser history support.
 - \`/\` focuses search; \`Escape\` clears the query.
 - \`GET /api/search?q=<query>\` request validation.
-- Explicit \`503 SEARCH_BACKEND_UNAVAILABLE\` until a real retrieval service and index are connected.
-- No fabricated or hard-coded search results.
-- No live global network telemetry feed yet.
+- Explicit \`503 SEARCH_BACKEND_UNAVAILABLE\` until a real search retrieval service and index are connected.
+- No fabricated search results or fabricated network telemetry.
 
 ## Requirements
 
@@ -44,17 +54,17 @@ npm test
 
 ## Cloudflare Pages
 
-Connect this repository to a Cloudflare Pages project with these settings:
-
 | Setting | Value |
 | --- | --- |
 | Production branch | \`main\` |
 | Framework preset | SvelteKit |
 | Build command | \`npm run build\` |
 | Build output directory | \`.svelte-kit/cloudflare\` |
-| Root directory | \`/\` (repository root) |
+| Root directory | \`/\` |
 
-The SvelteKit Cloudflare adapter produces the deployment output. API handlers belong in SvelteKit route files under \`src/routes\`; the root-level Pages \`functions/\` directory is not used by this adapter.
+To enable the optional Radar feed, add a Pages secret named \`CLOUDFLARE_RADAR_API_TOKEN\`. The token must have Account > Radar read permission. Do not expose the token to browser code.
+
+The SvelteKit Cloudflare adapter handles route endpoints under \`src/routes\`; the root-level Pages \`functions/\` directory is not used by this adapter.
 
 ## Search API
 
@@ -76,7 +86,7 @@ The crawler is a separate project ([rewide-machine](https://github.com/dummynetw
 
 ## Geographic data
 
-The globe land mask is based on [Natural Earth 1:110m land data](https://www.naturalearthdata.com/downloads/110m-physical-vectors/110m-land/). Natural Earth data is public domain.
+Country geometry is based on [Natural Earth 1:110m Admin 0 countries](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/). Natural Earth data is public domain.
 
 ## License
 

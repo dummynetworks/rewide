@@ -1,315 +1,330 @@
 <script>
   import { onMount } from 'svelte';
+  import * as THREE from 'three';
 
   let canvas;
-  let mapStatus = $state('loading');
+  let { onTelemetryChange } = $props();
 
   onMount(() => {
     const context = canvas?.getContext('2d', { alpha: false });
     if (!canvas || !context) {
-      mapStatus = 'unavailable';
+      onTelemetryChange?.({ state: 'unavailable' });
       return;
     }
 
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let points = [];
+    let renderer;
+    let resizeObserver;
+    let animationFrame = 0;
+    let disposed = false;
     let width = 0;
     let height = 0;
-    let rotation = -0.22;
-    let frame = 0;
-    let previousTime = 0;
-    let disposed = false;
-    let observer;
+    let previousFrameTime = 0;
+    let lastRenderTime = 0;
+    let texture;
+    let globe;
+    let telemetry = [];
 
-    function buildLandPoints(geoJson) {
-      const mapWidth = 1440;
-      const mapHeight = 720;
-      const mask = document.createElement('canvas');
-      mask.width = mapWidth;
-      mask.height = mapHeight;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
 
-      const maskContext = mask.getContext('2d', { willReadFrequently: true });
-      if (!maskContext) throw new Error('Canvas mask could not be created');
+    const camera = new THREE.PerspectiveCamera(37, 1, 0.1, 50);
+    camera.position.set(0, 0, 3.7);
 
-      maskContext.fillStyle = '#fff';
+    const textureCanvas = document.createElement('canvas');
+    textureCanvas.width = 2048;
+    textureCanvas.height = 1024;
+    const textureContext = textureCanvas.getContext('2d');
 
-      function drawPolygon(rings) {
-        maskContext.beginPath();
+    const sampleCanvas = document.createElement('canvas');
+    const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
 
-        for (const ring of rings) {
-          if (!Array.isArray(ring) || ring.length < 3) continue;
+    if (!textureContext || !sampleContext) {
+      onTelemetryChange?.({ state: 'unavailable' });
+      return;
+    }
 
-          ring.forEach(([longitude, latitude], index) => {
-            const x = ((longitude + 180) / 360) * mapWidth;
-            const y = ((90 - latitude) / 180) * mapHeight;
+    function drawPolygon(rings) {
+      textureContext.beginPath();
 
-            if (index === 0) maskContext.moveTo(x, y);
-            else maskContext.lineTo(x, y);
-          });
+      for (const ring of rings) {
+        if (!Array.isArray(ring) || ring.length < 3) continue;
 
-          maskContext.closePath();
-        }
+        ring.forEach(([longitude, latitude], index) => {
+          const x = ((longitude + 180) / 360) * textureCanvas.width;
+          const y = ((90 - latitude) / 180) * textureCanvas.height;
 
-        maskContext.fill('evenodd');
+          if (index === 0) textureContext.moveTo(x, y);
+          else textureContext.lineTo(x, y);
+        });
+
+        textureContext.closePath();
       }
+
+      textureContext.fill('evenodd');
+      textureContext.stroke();
+    }
+
+    function colorForTraffic(value, maximum) {
+      const amount = maximum > 0 ? Math.pow(value / maximum, 0.42) : 0;
+      const low = [48, 69, 78];
+      const high = [220, 235, 239];
+      const channels = low.map((channel, index) =>
+        Math.round(channel + ((high[index] - channel) * amount))
+      );
+      return 'rgb(' + channels.join(',') + ')';
+    }
+
+    function paintMap(geoJson) {
+      textureContext.fillStyle = '#0a1115';
+      textureContext.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
+
+      const distribution = new Map(
+        telemetry.map((item) => [item.code, item.value]),
+      );
+      const values = telemetry.map((item) => item.value).filter(Number.isFinite);
+      const maximum = values.length ? Math.max(...values) : 0;
+
+      textureContext.lineJoin = 'round';
+      textureContext.lineWidth = 0.65;
+      textureContext.strokeStyle = 'rgba(185, 210, 220, 0.16)';
 
       for (const feature of geoJson.features ?? []) {
-        const geometry = feature.geometry;
-        if (!geometry) continue;
+        const properties = feature.properties ?? {};
+        const code = properties.ISO_A2_EH ?? properties.ISO_A2 ?? '';
+        const value = distribution.get(code);
+        const fill = Number.isFinite(value)
+          ? colorForTraffic(value, maximum)
+          : '#50616a';
 
-        if (geometry.type === 'Polygon') {
-          drawPolygon(geometry.coordinates);
-        } else if (geometry.type === 'MultiPolygon') {
-          for (const polygon of geometry.coordinates) drawPolygon(polygon);
-        }
-      }
+        textureContext.fillStyle = fill;
 
-      const pixels = maskContext.getImageData(0, 0, mapWidth, mapHeight).data;
-      const generated = [];
-      const step = 2.15;
-
-      for (let latitude = -82; latitude <= 82; latitude += step) {
-        const y = Math.min(mapHeight - 1, Math.max(0, Math.floor(((90 - latitude) / 180) * mapHeight)));
-
-        for (let longitude = -179; longitude < 180; longitude += step) {
-          const x = Math.min(mapWidth - 1, Math.max(0, Math.floor(((longitude + 180) / 360) * mapWidth)));
-          const alpha = pixels[((y * mapWidth) + x) * 4 + 3];
-
-          if (alpha > 96) {
-            generated.push({
-              latitude: latitude * (Math.PI / 180),
-              longitude: longitude * (Math.PI / 180),
-            });
+        if (feature.geometry?.type === 'Polygon') {
+          drawPolygon(feature.geometry.coordinates);
+        } else if (feature.geometry?.type === 'MultiPolygon') {
+          for (const polygon of feature.geometry.coordinates) {
+            drawPolygon(polygon);
           }
         }
       }
 
-      return generated;
+      texture.needsUpdate = true;
     }
 
-    function resizeCanvas() {
-      const bounds = canvas.getBoundingClientRect();
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    function drawDotMask() {
+      renderer.render(scene, camera);
 
+      const spacing = width < 600 ? 4.2 : 4.8;
+      const sampleWidth = Math.max(1, Math.ceil(width / spacing));
+      const sampleHeight = Math.max(1, Math.ceil(height / spacing));
+
+      if (sampleCanvas.width !== sampleWidth || sampleCanvas.height !== sampleHeight) {
+        sampleCanvas.width = sampleWidth;
+        sampleCanvas.height = sampleHeight;
+      }
+
+      sampleContext.clearRect(0, 0, sampleWidth, sampleHeight);
+      sampleContext.drawImage(renderer.domElement, 0, 0, sampleWidth, sampleHeight);
+
+      const pixels = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data;
+
+      context.setTransform(
+        canvas.width / width, 0,
+        0, canvas.height / height,
+        0, 0,
+      );
+      context.fillStyle = '#000000';
+      context.fillRect(0, 0, width, height);
+
+      for (let y = 0; y < sampleHeight; y += 1) {
+        for (let x = 0; x < sampleWidth; x += 1) {
+          const index = ((y * sampleWidth) + x) * 4;
+          const red = pixels[index];
+          const green = pixels[index + 1];
+          const blue = pixels[index + 2];
+          const brightness = (red + green + blue) / 3;
+
+          if (brightness < 9) continue;
+
+          const alpha = Math.min(0.98, 0.14 + (brightness / 300));
+          const radius = 0.55 + ((brightness / 255) * 0.48);
+          const centerX = (x + 0.5) * spacing;
+          const centerY = (y + 0.5) * spacing;
+
+          context.fillStyle = 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';
+          context.beginPath();
+          context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+    }
+
+    function resize() {
+      const bounds = canvas.parentElement.getBoundingClientRect();
       width = Math.max(1, bounds.width);
       height = Math.max(1, bounds.height);
+
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = Math.round(width * pixelRatio);
       canvas.height = Math.round(height * pixelRatio);
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      draw();
+
+      renderer.setPixelRatio(1);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      drawDotMask();
     }
 
-    function draw() {
-      if (!width || !height) return;
-
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const radius = Math.min(width * 0.43, height * 0.43);
-
-      context.clearRect(0, 0, width, height);
-      context.fillStyle = '#101820';
-      context.fillRect(0, 0, width, height);
-
-      const atmosphere = context.createRadialGradient(
-        centerX, centerY, radius * 0.55,
-        centerX, centerY, radius * 1.55,
-      );
-      atmosphere.addColorStop(0, 'rgba(79, 112, 132, 0.13)');
-      atmosphere.addColorStop(0.66, 'rgba(49, 78, 96, 0.055)');
-      atmosphere.addColorStop(1, 'rgba(16, 24, 32, 0)');
-      context.fillStyle = atmosphere;
-      context.fillRect(0, 0, width, height);
-
-      const sphere = context.createRadialGradient(
-        centerX - radius * 0.38,
-        centerY - radius * 0.42,
-        radius * 0.05,
-        centerX,
-        centerY,
-        radius * 1.08,
-      );
-      sphere.addColorStop(0, '#1b2b35');
-      sphere.addColorStop(0.72, '#14232c');
-      sphere.addColorStop(1, '#0b141b');
-
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.fillStyle = sphere;
-      context.fill();
-
-      context.save();
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.clip();
-
-      context.strokeStyle = 'rgba(171, 197, 209, 0.105)';
-      context.lineWidth = 0.7;
-      context.beginPath();
-      context.ellipse(centerX, centerY, radius, radius * 0.29, -0.08, 0, Math.PI * 2);
-      context.stroke();
-
-      context.beginPath();
-      context.ellipse(centerX, centerY, radius * 0.38, radius, 0, 0, Math.PI * 2);
-      context.stroke();
-
-      context.beginPath();
-      context.ellipse(centerX, centerY, radius * 0.76, radius, 0, 0, Math.PI * 2);
-      context.stroke();
-
-      for (const point of points) {
-        const longitude = point.longitude + rotation;
-        const latitude = point.latitude;
-        const cosLatitude = Math.cos(latitude);
-        const x = Math.sin(longitude) * cosLatitude;
-        const y = Math.sin(latitude);
-        const z = Math.cos(longitude) * cosLatitude;
-
-        if (z <= 0.015) continue;
-
-        const depth = 0.26 + (z * 0.74);
-        const pointX = centerX + (x * radius);
-        const pointY = centerY - (y * radius);
-        const pointRadius = 0.58 + (depth * 0.56);
-
-        context.globalAlpha = 0.22 + (depth * 0.72);
-        context.fillStyle = '#c0d2d9';
-        context.beginPath();
-        context.arc(pointX, pointY, pointRadius, 0, Math.PI * 2);
-        context.fill();
-      }
-
-      context.globalAlpha = 1;
-      context.restore();
-
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.strokeStyle = 'rgba(185, 211, 222, 0.34)';
-      context.lineWidth = 1;
-      context.stroke();
-
-      context.beginPath();
-      context.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
-      context.strokeStyle = 'rgba(150, 181, 196, 0.10)';
-      context.lineWidth = 1;
-      context.stroke();
-    }
-
-    function animate(time) {
+    function renderFrame(time) {
       if (disposed) return;
+      animationFrame = window.requestAnimationFrame(renderFrame);
 
-      if (previousTime) {
-        const elapsed = Math.min((time - previousTime) / 1000, 0.05);
-        rotation += elapsed * 0.055;
-      }
+      if (time - lastRenderTime < 1000 / 30) return;
 
-      previousTime = time;
-      draw();
-      frame = window.requestAnimationFrame(animate);
+      const delta = previousFrameTime
+        ? Math.min((time - previousFrameTime) / 1000, 0.08)
+        : 0;
+
+      previousFrameTime = time;
+      lastRenderTime = time;
+
+      globe.rotation.y += delta * 0.025;
+      drawDotMask();
     }
 
-    function startAnimation() {
-      if (disposed || document.hidden || reducedMotion.matches || frame) return;
-      previousTime = 0;
-      frame = window.requestAnimationFrame(animate);
+    function start() {
+      if (disposed || document.hidden || animationFrame) return;
+      previousFrameTime = 0;
+      animationFrame = window.requestAnimationFrame(renderFrame);
     }
 
-    function stopAnimation() {
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = 0;
-      previousTime = 0;
+    function stop() {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
+      previousFrameTime = 0;
     }
 
     function handleVisibility() {
-      if (document.hidden) stopAnimation();
-      else startAnimation();
+      if (document.hidden) stop();
+      else start();
     }
 
-    function handleMotionPreference() {
-      if (reducedMotion.matches) {
-        stopAnimation();
-        draw();
+    async function loadData() {
+      try {
+        const mapResponse = await fetch('/earth-countries.geojson', {
+          cache: 'force-cache',
+        });
+        if (!mapResponse.ok) throw new Error('Geographic data unavailable');
+
+        const geoJson = await mapResponse.json();
+        paintMap(geoJson);
+        drawDotMask();
+
+        try {
+          const telemetryResponse = await fetch('/api/earth', {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+
+          if (telemetryResponse.ok) {
+            const payload = await telemetryResponse.json();
+            telemetry = Array.isArray(payload.countries) ? payload.countries : [];
+            paintMap(geoJson);
+            onTelemetryChange?.({
+              state: 'ready',
+              source: payload.source,
+              lastUpdated: payload.lastUpdated,
+              dateRange: payload.dateRange,
+            });
+          } else {
+            onTelemetryChange?.({ state: 'unavailable' });
+          }
+        } catch {
+          onTelemetryChange?.({ state: 'unavailable' });
+        }
+      } catch {
+        onTelemetryChange?.({ state: 'unavailable' });
+      }
+
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        start();
       } else {
-        startAnimation();
+        drawDotMask();
       }
     }
 
-    observer = new ResizeObserver(resizeCanvas);
-    observer.observe(canvas);
-    resizeCanvas();
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+        preserveDrawingBuffer: true,
+      });
+    } catch {
+      onTelemetryChange?.({ state: 'unavailable' });
+      return;
+    }
+
+    renderer.setPixelRatio(1);
+    renderer.setClearColor(0x000000, 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    texture = new THREE.CanvasTexture(textureCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const geometry = new THREE.SphereGeometry(1.08, 160, 160);
+    const material = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 1,
+      metalness: 0,
+    });
+
+    globe = new THREE.Mesh(geometry, material);
+    globe.rotation.y = -Math.PI / 2;
+    scene.add(globe);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    const keyLight = new THREE.DirectionalLight(0xe5f0f3, 1.8);
+    keyLight.position.set(-3, 2.4, 4);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x45616e, 0.48);
+    fillLight.position.set(2.2, -0.5, -3);
+    scene.add(fillLight);
+
+    resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas.parentElement);
+    resize();
 
     document.addEventListener('visibilitychange', handleVisibility);
-    reducedMotion.addEventListener('change', handleMotionPreference);
-
-    async function loadLandData() {
-      try {
-        const response = await fetch('/earth-land.geojson', { cache: 'force-cache' });
-        if (!response.ok) throw new Error('Land data request failed');
-
-        const geoJson = await response.json();
-        points = buildLandPoints(geoJson);
-
-        if (!points.length) throw new Error('No land points were generated');
-
-        mapStatus = 'ready';
-        draw();
-        startAnimation();
-      } catch {
-        mapStatus = 'unavailable';
-        draw();
-      }
-    }
-
-    void loadLandData();
+    await loadData();
 
     return () => {
       disposed = true;
-      stopAnimation();
-      observer?.disconnect();
+      stop();
+      resizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', handleVisibility);
-      reducedMotion.removeEventListener('change', handleMotionPreference);
+      geometry.dispose();
+      material.dispose();
+      texture.dispose();
+      renderer.dispose();
     };
   });
 </script>
 
-<div class="earth-view">
-  <canvas
-    bind:this={canvas}
-    class="earth-canvas"
-    role="img"
-    aria-label="A slowly rotating dotted globe, with land points drawn from Natural Earth geographic data."
-  ></canvas>
-  <span class="sr-only">
-    {#if mapStatus === 'ready'}
-      Geographic land mask loaded. Live network telemetry is not connected.
-    {:else if mapStatus === 'loading'}
-      Loading geographic land data.
-    {:else}
-      Geographic land data could not be loaded.
-    {/if}
-  </span>
-</div>
+<canvas
+  bind:this={canvas}
+  class="earth-canvas"
+  role="img"
+  aria-label="A slowly rotating three-dimensional Earth. Its WebGL rendering is converted into a two-dimensional dotted grid through Canvas."
+></canvas>
 
 <style>
-  .earth-view {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    background: #101820;
-  }
-
   .earth-canvas {
     display: block;
     width: 100%;
     height: 100%;
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    clip-path: inset(50%);
+    background: #000;
   }
 </style>

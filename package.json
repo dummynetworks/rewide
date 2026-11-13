@@ -13,6 +13,9 @@
     "preview": "vite preview",
     "test": "node --test"
   },
+  "dependencies": {
+    "three": "0.187.0"
+  },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "7.2.10",
     "@sveltejs/kit": "2.70.4",
