@@ -6,22 +6,15 @@ rewide is an open-web search engine. The application is built with SvelteKit and
 
 ## Interface
 
-The search interface is an original implementation inspired by the visual language of [system24](https://github.com/refact0r/system24), a TUI-style Discord theme. It uses monospaced typography, compact text, panel labels attached to borders, visible separators, and a restrained dark palette.
+The search interface is an original, minimal implementation inspired by [system24](https://github.com/refact0r/system24): monospaced typography, square panel boundaries, compact labels, and keyboard-first interaction.
 
-This is not a port of the Discord theme or its stylesheet. The layout is adapted for a search application.
-
-### Interface rules
-
-- Search and response state take priority over promotional copy.
-- Panel names sit on their top borders, with no rounded-card dashboard layout.
-- Compact labels and plain text controls keep the interface information-dense.
-- Keyboard support: `/` focuses the query field; `Escape` clears it.
-- The sidebar documents the search scope, retrieval approach, and ranking specification.
+The interface keeps only the search field and its response area. Engine metadata, ranking explanations, request diagnostics, and decorative dashboard panels are intentionally omitted.
 
 ## Current state
 
 - SvelteKit application shell and search interface.
 - Query-string navigation and browser history support.
+- `/` focuses search; `Escape` clears the query.
 - `GET /api/search?q=<query>` request validation.
 - Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real retrieval service and index are connected.
 - No fabricated or hard-coded search results.
