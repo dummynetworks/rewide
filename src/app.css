@@ -1,6 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Canadian+Aboriginal:wght@100..900&display=swap');
+
 :root {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  font-family: "Noto Sans Canadian Aboriginal", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
