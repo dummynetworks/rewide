@@ -152,22 +152,16 @@
 
           if (brightness < 5) continue;
 
-          // Ocean has no country statistic: render it as a stable, visible navy dot field.
-          // Land density alone encodes the min-to-max internet-use distribution.
+          // Keep the grid complete: encode the statistic through dot size, not skipped dots.
+          // Ocean has no country statistic, so it uses a smaller fixed dot.
           const isOcean = (blue - red) > 36;
-          const density = isOcean
-            ? 0.62
-            : 0.14 + (0.86 * Math.max(
-              0,
-              Math.min(1, (brightness - 20) / 213),
-            ));
-          let hash = (x * 374761393 + y * 668265263) | 0;
-          hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
-          const point = ((hash ^ (hash >>> 16)) >>> 0) / 4294967295;
-
-          if (point > density) continue;
-
-          const radius = 2.65;
+          const normalizedValue = Math.max(
+            0,
+            Math.min(1, (brightness - 24) / 209),
+          );
+          const radius = isOcean
+            ? 1.55
+            : 1.45 + (normalizedValue * 2.25);
           const centerX = (x + 0.5) * spacing;
           const centerY = (y + 0.5) * spacing;
 
