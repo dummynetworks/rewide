@@ -165,7 +165,7 @@
           const centerX = (x + 0.5) * spacing;
           const centerY = (y + 0.5) * spacing;
 
-          const oceanGray = Math.max(38, Math.min(78, Math.round(brightness * 1.55)));
+          const oceanGray = Math.max(22, Math.min(42, Math.round(brightness * 0.85)));
           const dotColor = isOcean
             ? 'rgb(' + oceanGray + ',' + oceanGray + ',' + oceanGray + ')'
             : 'rgb(' + red + ',' + green + ',' + blue + ')';
