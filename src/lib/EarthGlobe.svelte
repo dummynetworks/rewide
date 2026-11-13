@@ -338,5 +338,6 @@
     width: 100%;
     height: 100%;
     background: #000;
+    filter: grayscale(1);
   }
 </style>
