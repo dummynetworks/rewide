@@ -1,14 +1,27 @@
 # rewide
 
-**Search Engine You're watching for.**
+Open-web search by dummyNet.
 
-rewide is an open-web search engine by dummyNet. The application is built with SvelteKit and deployed to Cloudflare Pages using the Cloudflare adapter.
+rewide is an open-web search engine. The application is built with SvelteKit and deployed to Cloudflare Pages using the Cloudflare adapter.
+
+## Interface
+
+The search interface uses an original, browser-native layout inspired by the visual language of [system24](https://github.com/refact0r/system24): monospaced typography, square panel boundaries, compact labels, keyboard-first interaction, and high information density.
+
+This is an independent implementation for a search application, not a port of the Discord theme or its stylesheet.
+
+### Interface rules
+
+- Search and response state take priority over promotional copy.
+- Panels use explicit labels and visible boundaries.
+- No rounded-card dashboard layout, glass effects, or decorative hero section.
+- Keyboard support: `/` focuses the query field; `Escape` clears it.
+- The sidebar documents the search scope, retrieval approach, and ranking specification.
 
 ## Current state
 
 - SvelteKit application shell and search interface.
 - Query-string navigation and browser history support.
-- Accessible keyboard shortcuts: `/` focuses search; `Escape` clears it.
 - `GET /api/search?q=<query>` request validation.
 - Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real retrieval service and index are connected.
 - No fabricated or hard-coded search results.
@@ -52,17 +65,17 @@ The SvelteKit Cloudflare adapter produces the deployment output. API handlers be
 
 | Status | Meaning |
 | --- | --- |
-| `200` | Search completed (not implemented yet) |
+| `200` | A connected search backend returned a response |
 | `400` | Missing, empty, or overlong query |
 | `503` | Search backend is not connected |
 
-The search pipeline is intended to follow the agreed order:
+The intended ranking sequence is:
 
 1. **R — Relevance:** Is it relevant?
 2. **Q — Quality:** Is it good?
 3. **B — Balance:** Is the overall result balanced?
 
-The crawler is a separate project (`rewide-machine`). Crawling, indexing, retrieval, and ranking will be integrated as real services rather than simulated in this frontend.
+The crawler is a separate project ([rewide-machine](https://github.com/dummynetworks/rewide-machine)). Crawling, indexing, retrieval, and ranking will be integrated as real services rather than simulated in this frontend.
 
 ## License
 
