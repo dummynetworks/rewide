@@ -190,6 +190,13 @@
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+
+      // Place the globe's geometric center at the canvas's left edge.
+      const halfViewWidth = camera.position.z
+        * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+        * camera.aspect;
+      globe.position.x = -halfViewWidth;
+
       drawDotMask();
     }
 
@@ -303,6 +310,7 @@
 
     globe = new THREE.Mesh(geometry, material);
     globe.rotation.y = -Math.PI / 2;
+    globe.scale.setScalar(1.2);
     scene.add(globe);
 
     resizeObserver = new ResizeObserver(resize);
