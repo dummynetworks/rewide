@@ -64,10 +64,11 @@
       textureContext.stroke();
     }
 
-    function colorForTraffic(value, maximum) {
-      const amount = maximum > 0 ? Math.pow(value / maximum, 0.42) : 0;
-      const low = [48, 69, 78];
-      const high = [220, 235, 239];
+    function colorForInternetUse(value) {
+      const percentage = Math.max(0, Math.min(100, value));
+      const amount = Math.pow(percentage / 100, 0.72);
+      const low = [32, 46, 54];
+      const high = [224, 239, 243];
       const channels = low.map((channel, index) =>
         Math.round(channel + ((high[index] - channel) * amount))
       );
@@ -81,20 +82,17 @@
       const distribution = new Map(
         telemetry.map((item) => [item.code, item.value]),
       );
-      const values = telemetry.map((item) => item.value).filter(Number.isFinite);
-      const maximum = values.length ? Math.max(...values) : 0;
-
       textureContext.lineJoin = 'round';
       textureContext.lineWidth = 0.65;
       textureContext.strokeStyle = 'rgba(185, 210, 220, 0.16)';
 
       for (const feature of geoJson.features ?? []) {
         const properties = feature.properties ?? {};
-        const code = properties.ISO_A2_EH ?? properties.ISO_A2 ?? '';
+        const code = properties.ISO_A3_EH ?? properties.ISO_A3 ?? '';
         const value = distribution.get(code);
         const fill = Number.isFinite(value)
-          ? colorForTraffic(value, maximum)
-          : '#50616a';
+          ? colorForInternetUse(value)
+          : '#35464f';
 
         textureContext.fillStyle = fill;
 
@@ -228,12 +226,16 @@
           if (telemetryResponse.ok) {
             const payload = await telemetryResponse.json();
             telemetry = Array.isArray(payload.countries) ? payload.countries : [];
+            if (telemetry.length === 0) {
+              throw new Error('World Bank returned no country observations');
+            }
             paintMap(geoJson);
             onTelemetryChange?.({
               state: 'ready',
               source: payload.source,
-              lastUpdated: payload.lastUpdated,
-              dateRange: payload.dateRange,
+              indicator: payload.indicator,
+              earliestYear: payload.earliestYear,
+              latestYear: payload.latestYear,
             });
           } else {
             onTelemetryChange?.({ state: 'unavailable' });
