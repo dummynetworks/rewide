@@ -79,7 +79,8 @@
     }
 
     function paintMap(geoJson) {
-      textureContext.fillStyle = '#000000';
+      // Keep the ocean distinct from the page's pure-black background.
+      textureContext.fillStyle = '#0b2940';
       textureContext.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
 
       const values = telemetry
@@ -151,10 +152,15 @@
 
           if (brightness < 5) continue;
 
-          const density = 0.14 + (0.86 * Math.max(
-            0,
-            Math.min(1, (brightness - 20) / 213),
-          ));
+          // Ocean has no country statistic: render it as a stable, visible navy dot field.
+          // Land density alone encodes the min-to-max internet-use distribution.
+          const isOcean = (blue - red) > 36;
+          const density = isOcean
+            ? 0.62
+            : 0.14 + (0.86 * Math.max(
+              0,
+              Math.min(1, (brightness - 20) / 213),
+            ));
           let hash = (x * 374761393 + y * 668265263) | 0;
           hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
           const point = ((hash ^ (hash >>> 16)) >>> 0) / 4294967295;
