@@ -64,11 +64,14 @@
       textureContext.stroke();
     }
 
-    function colorForInternetUse(value) {
-      const percentage = Math.max(0, Math.min(100, value));
-      const amount = Math.pow(percentage / 100, 0.72);
-      const low = [32, 46, 54];
-      const high = [224, 239, 243];
+    function colorForInternetUse(value, minimum, maximum) {
+      const range = maximum - minimum;
+      const normalized = range > 0
+        ? Math.max(0, Math.min(1, (value - minimum) / range))
+        : 1;
+      const amount = Math.pow(normalized, 0.82);
+      const low = [16, 25, 33];
+      const high = [220, 236, 244];
       const channels = low.map((channel, index) =>
         Math.round(channel + ((high[index] - channel) * amount))
       );
@@ -76,9 +79,14 @@
     }
 
     function paintMap(geoJson) {
-      textureContext.fillStyle = '#0a1115';
+      textureContext.fillStyle = '#000000';
       textureContext.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
 
+      const values = telemetry
+        .map((item) => item.value)
+        .filter(Number.isFinite);
+      const minimum = values.length ? Math.min(...values) : 0;
+      const maximum = values.length ? Math.max(...values) : 0;
       const distribution = new Map(
         telemetry.map((item) => [item.code, item.value]),
       );
@@ -91,8 +99,8 @@
         const code = properties.ISO_A3_EH ?? properties.ISO_A3 ?? '';
         const value = distribution.get(code);
         const fill = Number.isFinite(value)
-          ? colorForInternetUse(value)
-          : '#35464f';
+          ? colorForInternetUse(value, minimum, maximum)
+          : '#1d2931';
 
         textureContext.fillStyle = fill;
 
@@ -141,14 +149,23 @@
           const blue = pixels[index + 2];
           const brightness = (red + green + blue) / 3;
 
-          if (brightness < 9) continue;
+          if (brightness < 5) continue;
 
-          const alpha = Math.min(1, 0.32 + (brightness / 300));
-          const radius = 2.3 + ((brightness / 255) * 1.4);
+          const density = 0.14 + (0.86 * Math.max(
+            0,
+            Math.min(1, (brightness - 20) / 213),
+          ));
+          let hash = (x * 374761393 + y * 668265263) | 0;
+          hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
+          const point = ((hash ^ (hash >>> 16)) >>> 0) / 4294967295;
+
+          if (point > density) continue;
+
+          const radius = 2.65;
           const centerX = (x + 0.5) * spacing;
           const centerY = (y + 0.5) * spacing;
 
-          context.fillStyle = 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';
+          context.fillStyle = 'rgb(' + red + ',' + green + ',' + blue + ')';
           context.beginPath();
           context.arc(centerX, centerY, radius, 0, Math.PI * 2);
           context.fill();
@@ -275,25 +292,14 @@
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
     const geometry = new THREE.SphereGeometry(1.08, 160, 160);
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshBasicMaterial({
       map: texture,
-      roughness: 1,
-      metalness: 0,
+      toneMapped: false,
     });
 
     globe = new THREE.Mesh(geometry, material);
     globe.rotation.y = -Math.PI / 2;
     scene.add(globe);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
-    const keyLight = new THREE.DirectionalLight(0xe5f0f3, 1.8);
-    keyLight.position.set(-3, 2.4, 4);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0x45616e, 0.48);
-    fillLight.position.set(2.2, -0.5, -3);
-    scene.add(fillLight);
 
     resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas.parentElement);
