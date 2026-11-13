@@ -16,7 +16,7 @@ function json(data, status, extraHeaders = {}) {
 }
 
 function createMatchExpression(query) {
-  const terms = query.match(/[\\p{L}\\p{N}]+/gu) ?? [];
+  const terms = query.match(/[\p{L}\p{N}]+/gu) ?? [];
   if (terms.length === 0) return null;
   if (terms.length > MAX_QUERY_TERMS) return undefined;
 
