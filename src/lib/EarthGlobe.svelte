@@ -298,7 +298,7 @@
     resize();
 
     document.addEventListener('visibilitychange', handleVisibility);
-    await loadData();
+    void loadData();
 
     return () => {
       disposed = true;
