@@ -113,7 +113,7 @@
     function drawDotMask() {
       renderer.render(scene, camera);
 
-      const spacing = width < 600 ? 5.2 : 5.6;
+      const spacing = width < 600 ? 7.2 : 7.8;
       const sampleWidth = Math.max(1, Math.ceil(width / spacing));
       const sampleHeight = Math.max(1, Math.ceil(height / spacing));
 
@@ -145,8 +145,8 @@
 
           if (brightness < 9) continue;
 
-          const alpha = Math.min(1, 0.24 + (brightness / 330));
-          const radius = 1.35 + ((brightness / 255) * 0.85);
+          const alpha = Math.min(1, 0.32 + (brightness / 300));
+          const radius = 2.3 + ((brightness / 255) * 1.4);
           const centerX = (x + 0.5) * spacing;
           const centerY = (y + 0.5) * spacing;
 
