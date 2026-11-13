@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { ArrowRight } from '@lucide/svelte';
   import EarthGlobe from '$lib/EarthGlobe.svelte';
 
   let query = $state('');
@@ -166,10 +167,7 @@
           bind:value={query}
         />
         <button type="submit" aria-label="Search">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M3.5 10h12"></path>
-            <path d="m10 4.5 5.5 5.5-5.5 5.5"></path>
-          </svg>
+          <ArrowRight size={18} strokeWidth={1.4} aria-hidden="true" />
         </button>
       </form>
 
