@@ -7,6 +7,8 @@
   let status = $state('');
   let statusState = $state('idle');
   let hasSearched = $state(false);
+  let searchResults = $state([]);
+  let searchSequence = 0;
   let telemetryMessage = $state('loading annual internet-use data');
   let inputElement;
 
@@ -14,6 +16,8 @@
     SEARCH_BACKEND_UNAVAILABLE: 'search service is not connected yet',
     INVALID_QUERY: 'enter a search query',
     QUERY_TOO_LONG: 'query is too long (maximum 256 characters)',
+    QUERY_TOO_COMPLEX: 'use 12 search terms or fewer',
+    SEARCH_QUERY_FAILED: 'search could not be completed',
   };
 
   function handleTelemetryChange(event) {
@@ -34,12 +38,16 @@
   }
 
   function resetResults() {
+    searchSequence += 1;
+    searchResults = [];
     status = '';
     statusState = 'idle';
     hasSearched = false;
   }
 
   async function search(value) {
+    const requestId = ++searchSequence;
+    searchResults = [];
     setStatus('searching…', 'loading');
 
     const url = new URL('/api/search', window.location.origin);
@@ -51,6 +59,7 @@
         cache: 'no-store',
       });
       const payload = await response.json();
+      if (requestId !== searchSequence) return;
 
       if (!response.ok) {
         setStatus(
@@ -60,8 +69,11 @@
         return;
       }
 
-      setStatus('search completed, but result rendering is not available yet', 'error');
+      searchResults = Array.isArray(payload.results) ? payload.results : [];
+      const count = Number(payload.count ?? searchResults.length);
+      setStatus(count === 0 ? 'no indexed results found' : String(count) + (count === 1 ? ' result' : ' results'));
     } catch {
+      if (requestId !== searchSequence) return;
       setStatus('could not connect to the search service', 'error');
     }
   }
@@ -175,6 +187,22 @@
         <p class="search-response" data-state={statusState} aria-live="polite">
           {status}
         </p>
+      {/if}
+
+      {#if searchResults.length > 0}
+        <section class="search-results" aria-label="Search results">
+          {#each searchResults as result (result.url)}
+            <article class="search-result">
+              <a class="result-title" href={result.url} target="_blank" rel="noopener noreferrer">
+                {result.title || result.url}
+              </a>
+              <p class="result-url">{result.url}</p>
+              {#if result.description || result.snippet}
+                <p class="result-summary">{result.description || result.snippet}</p>
+              {/if}
+            </article>
+          {/each}
+        </section>
       {/if}
     </div>
 
