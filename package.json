@@ -1,0 +1,10 @@
+{
+  "name": "rewide",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Open web search by dummyNet",
+  "scripts": {
+    "test": "node --test"
+  }
+}
