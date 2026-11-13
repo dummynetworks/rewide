@@ -2,40 +2,49 @@
 
 **Search Engine You're watching for.**
 
-rewide is an open-web search engine by dummyNet. The initial application shell is a dependency-free static site with a Cloudflare Pages Function for the search API boundary.
+rewide is an open-web search engine by dummyNet. The application is built with SvelteKit and deployed to Cloudflare Pages using the Cloudflare adapter.
 
 ## Current state
 
-- Search interface and query-string navigation.
+- SvelteKit application shell and search interface.
+- Query-string navigation and browser history support.
 - Accessible keyboard shortcuts: `/` focuses search; `Escape` clears it.
 - `GET /api/search?q=<query>` request validation.
 - Explicit `503 SEARCH_BACKEND_UNAVAILABLE` until a real retrieval service and index are connected.
 - No fabricated or hard-coded search results.
 
+## Requirements
+
+- Node.js 20.19 or later
+- npm
+
 ## Development
 
-Requires Node.js 20 or later.
-
 ```sh
-npm test
+npm install
+npm run dev
 ```
 
-For local Pages development, install Wrangler separately and run:
+## Build and test
 
 ```sh
-npx wrangler pages dev .
+npm run build
+npm test
 ```
 
 ## Cloudflare Pages
 
-Create a Pages project connected to this repository.
+Connect this repository to a Cloudflare Pages project with these settings:
 
-- Production branch: `main`
-- Build command: leave empty
-- Build output directory: `.`
-- Root directory: `/`
+| Setting | Value |
+| --- | --- |
+| Production branch | `main` |
+| Framework preset | SvelteKit |
+| Build command | `npm run build` |
+| Build output directory | `.svelte-kit/cloudflare` |
+| Root directory | `/` (repository root) |
 
-The site is static; `functions/api/search.js` is deployed as a Pages Function. Static asset delivery and Function execution are separate Cloudflare usage categories.
+The SvelteKit Cloudflare adapter produces the deployment output. API handlers belong in SvelteKit route files under `src/routes`; the root-level Pages `functions/` directory is not used by this adapter.
 
 ## Search API
 
@@ -45,19 +54,7 @@ The site is static; `functions/api/search.js` is deployed as a Pages Function. S
 | --- | --- |
 | `200` | Search completed (not implemented yet) |
 | `400` | Missing, empty, or overlong query |
-| `405` | Unsupported method |
 | `503` | Search backend is not connected |
-
-Error response:
-
-```json
-{
-  "error": {
-    "code": "SEARCH_BACKEND_UNAVAILABLE",
-    "message": "The rewide search backend is not connected."
-  }
-}
-```
 
 The search pipeline is intended to follow the agreed order:
 
