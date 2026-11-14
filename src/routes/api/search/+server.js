@@ -1,3 +1,5 @@
+import { requestSearchCrawls } from '$lib/server/crawler.js';
+
 const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
@@ -25,7 +27,7 @@ function createMatchExpression(query) {
   return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND ');
 }
 
-export async function GET({ url, platform }) {
+export async function GET({ url, platform, fetch }) {
   const query = (url.searchParams.get('q') ?? '').trim();
 
   if (!query) {
@@ -96,6 +98,12 @@ export async function GET({ url, platform }) {
     `).bind(matchExpression, MAX_RESULTS).all();
 
     const rows = Array.isArray(result?.results) ? result.results : [];
+    const crawl = await requestSearchCrawls({
+      documents: rows,
+      env: platform?.env,
+      fetcher: fetch,
+    });
+
     return json({
       query,
       count: rows.length,
@@ -109,6 +117,7 @@ export async function GET({ url, platform }) {
         language: row.language || null,
         fetchedAt: row.fetchedAt,
       })),
+      crawl,
     }, 200);
   } catch {
     return json({
