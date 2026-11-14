@@ -1,4 +1,4 @@
-import { requestSearchCrawls } from '$lib/server/crawler.js';
+import { requestSearchCrawls } from '../../../lib/server/crawler.js';
 
 const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8',
