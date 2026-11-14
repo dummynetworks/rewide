@@ -88,10 +88,10 @@ The Pages project can submit result URLs to the existing `rewide-machine` Worker
 
 | Variable | Type | Value |
 | --- | --- | --- |
-| `REWIDE_CRAWLER_URL` | Variable | `https://rewide-machine.dummynet.workers.dev` |
+| `REWIDE_CRAWLER_URL` | Variable (optional) | Defaults to `https://rewide-machine.dummynet.workers.dev` |
 | `REWIDE_CRAWLER_TOKEN` | Secret | The same secret value configured as `DUMMYNET_TOKEN` on rewide-machine |
 
-The crawler token must be at least 24 characters. Do not put it in client-side environment variables or commit it to Git. If the crawler secret is absent, search continues to work against D1 and automatic refresh submission remains disabled.
+Only `REWIDE_CRAWLER_TOKEN` is required when using the default Worker hostname; set `REWIDE_CRAWLER_URL` only when the crawler API is hosted at a different HTTPS endpoint. The token must be at least 24 characters and must match the `DUMMYNET_TOKEN` secret on rewide-machine. Do not put it in client-side environment variables or commit it to Git. If the crawler secret is absent, search continues to work against D1 and automatic refresh submission remains disabled.
 
 For every search, the server submits at most the 10 URLs returned by D1 FTS5. Each submission asks for a single-page crawl (`maxPages: 1`, `maxDepth: 0`). The Worker performs the authoritative 24-hour `watchTTL` check and queues only eligible URLs. The search API does not wait for crawls to finish and does not discover URLs that are not already indexed.
 
