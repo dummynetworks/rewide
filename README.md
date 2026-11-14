@@ -30,6 +30,9 @@ The World Bank Indicators API is public and does not require an API key. The end
 - Query-string navigation and browser history support.
 - `/` focuses search; `Escape` clears the query.
 - `GET /api/search?q=<query>` retrieves up to 10 documents from the shared D1 FTS5 index.
+- The server-side search route submits the URLs in those indexed results to `rewide-machine` for on-demand freshness checks. The crawler's D1-backed 24-hour `watchTTL` decides whether each URL is already fresh, already queued, or needs a new crawl job.
+- Search results are returned immediately from the current index; crawl jobs run asynchronously and become visible to later searches after the document index is updated.
+- This refreshes URLs already present in the search results. It does not discover new URLs from a search query by itself.
 - Search results are rendered in the home-page interface.
 - Search binding absence is reported explicitly as `503 SEARCH_BACKEND_UNAVAILABLE`.
 
@@ -68,7 +71,7 @@ The SvelteKit Cloudflare adapter handles route endpoints under `src/routes`; the
 
 `GET /api/search?q=<query>`
 
-The first retrieval milestone queries the D1 FTS5 index maintained by [rewide-machine](https://github.com/dummynetworks/rewide-machine).
+The retrieval endpoint queries the D1 FTS5 index maintained by [rewide-machine](https://github.com/dummynetworks/rewide-machine) and submits returned URLs to its user-triggered 24-hour refresh policy when the Pages crawler secret is configured.
 
 | Status | Meaning |
 | --- | --- |
@@ -78,6 +81,19 @@ The first retrieval milestone queries the D1 FTS5 index maintained by [rewide-ma
 | `503` | The Pages D1 binding is not configured |
 
 Search currently uses lexical full-text matching: normalized query terms are combined with AND, indexed title and description fields receive higher relevance weight than body text, and at most 10 indexable documents are returned. This is the retrieval foundation, not the final R/Q/B ranking system.
+
+### On-demand crawler binding
+
+The Pages project can submit result URLs to the existing `rewide-machine` Worker without exposing credentials to browser code. Configure these server-side bindings in the Pages production environment:
+
+| Variable | Type | Value |
+| --- | --- | --- |
+| `REWIDE_CRAWLER_URL` | Variable | `https://rewide-machine.dummynet.workers.dev` |
+| `REWIDE_CRAWLER_TOKEN` | Secret | The same secret value configured as `DUMMYNET_TOKEN` on rewide-machine |
+
+The crawler token must be at least 24 characters. Do not put it in client-side environment variables or commit it to Git. If the crawler secret is absent, search continues to work against D1 and automatic refresh submission remains disabled.
+
+For every search, the server submits at most the 10 URLs returned by D1 FTS5. Each submission asks for a single-page crawl (`maxPages: 1`, `maxDepth: 0`). The Worker performs the authoritative 24-hour `watchTTL` check and queues only eligible URLs. The search API does not wait for crawls to finish and does not discover URLs that are not already indexed.
 
 ### Cloudflare Pages D1 binding
 
