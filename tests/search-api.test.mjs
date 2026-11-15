@@ -79,6 +79,7 @@ test('queries indexed documents with safely quoted AND terms', async () => {
     description: 'Documentation example',
     snippet: 'This domain is for documentation …',
     canonicalUrl: null,
+    canonicalStatus: 'missing',
     language: 'en',
     fetchedAt: '2026-11-14T00:00:00.000Z',
     relevance: -1.5,
@@ -93,6 +94,7 @@ test('queries indexed documents with safely quoted AND terms', async () => {
   assert.equal(body.count, 1);
   assert.equal(body.results[0].position, 1);
   assert.equal(body.results[0].title, 'Example Domain');
+  assert.equal(body.results[0].canonicalStatus, 'missing');
   assert.equal(database.calls.length, 2);
   assert.match(database.calls[0].sql, /documents_fts MATCH \?/);
   assert.deepEqual(database.calls[0].values, ['"example" AND "domain"', 10]);
