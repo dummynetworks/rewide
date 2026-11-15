@@ -28,3 +28,9 @@ jobs:
 
       - name: Build Cloudflare Pages app
         run: npm run build
+
+      - name: Build Pagefind snapshot fixture
+        run: |
+          npm install --prefix tools/pagefind-indexer
+          npm run build --prefix tools/pagefind-indexer -- --input examples/sample-documents.ndjson --output dist/pagefind
+          test -s tools/pagefind-indexer/dist/pagefind/pagefind.js
