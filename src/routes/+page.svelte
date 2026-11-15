@@ -18,7 +18,16 @@
     QUERY_TOO_LONG: 'query is too long (maximum 256 characters)',
     QUERY_TOO_COMPLEX: 'use 12 search terms or fewer',
     SEARCH_QUERY_FAILED: 'search could not be completed',
+    DISCOVERY_NOT_CONFIGURED: 'web discovery is not configured yet',
+    DISCOVERY_URL_INVALID: 'web discovery endpoint is invalid',
+    DISCOVERY_PROVIDER_UNAVAILABLE: 'web discovery is unavailable',
+    DISCOVERY_PROVIDER_FAILED: 'web discovery request failed',
+    DISCOVERY_RATE_LIMITED: 'web discovery rate limit reached',
+    CRAWLER_NOT_CONFIGURED: 'crawler service is not configured',
   };
+
+  const SEARCH_POLL_INTERVAL_MS = 1_500;
+  const SEARCH_POLL_MAX_ATTEMPTS = 80;
 
   function handleTelemetryChange(event) {
     if (event.state === 'ready') {
@@ -45,6 +54,44 @@
     hasSearched = false;
   }
 
+  async function pollDiscoverySearch(pollUrl, requestId) {
+    for (let attempt = 0; attempt < SEARCH_POLL_MAX_ATTEMPTS; attempt += 1) {
+      if (requestId !== searchSequence) return;
+
+      await new Promise((resolve) => setTimeout(resolve, SEARCH_POLL_INTERVAL_MS));
+      if (requestId !== searchSequence) return;
+
+      const response = await fetch(pollUrl, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await response.json();
+
+      if (requestId !== searchSequence) return;
+      if (!response.ok) {
+        setStatus(
+          messages[payload.error?.code] ?? payload.error?.message ?? 'crawl status request failed',
+          'error',
+        );
+        return;
+      }
+
+      if (payload.pending === true) {
+        setStatus('crawling discovered pages…', 'loading');
+        continue;
+      }
+
+      searchResults = Array.isArray(payload.results) ? payload.results : [];
+      const count = Number(payload.count ?? searchResults.length);
+      setStatus(count === 0 ? 'no results found' : String(count) + (count === 1 ? ' result' : ' results'));
+      return;
+    }
+
+    if (requestId === searchSequence) {
+      setStatus('crawling is taking longer than expected; search again shortly', 'error');
+    }
+  }
+
   async function search(value) {
     const requestId = ++searchSequence;
     searchResults = [];
@@ -69,9 +116,15 @@
         return;
       }
 
+      if (payload.pending === true && typeof payload.pollUrl === 'string') {
+        setStatus('crawling discovered pages…', 'loading');
+        await pollDiscoverySearch(payload.pollUrl, requestId);
+        return;
+      }
+
       searchResults = Array.isArray(payload.results) ? payload.results : [];
       const count = Number(payload.count ?? searchResults.length);
-      setStatus(count === 0 ? 'no indexed results found' : String(count) + (count === 1 ? ' result' : ' results'));
+      setStatus(count === 0 ? 'no results found' : String(count) + (count === 1 ? ' result' : ' results'));
     } catch {
       if (requestId !== searchSequence) return;
       setStatus('could not connect to the search service', 'error');

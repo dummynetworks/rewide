@@ -31,9 +31,10 @@ The World Bank Indicators API is public and does not require an API key. The end
 - `/` focuses search; `Escape` clears the query.
 - `GET /api/search?q=<query>` remains the website's compatibility endpoint.
 - `GET /api/v1/search?q=<query>` is the canonical, versioned search API. Both paths use the same v1 handler and response contract.
-- Search retrieves up to 10 documents from the shared D1 FTS5 index and supplements them with matching discovered URLs.
-- The server-side search service submits only URLs included in the final result set to `rewide-machine`. The crawler's D1-backed 24-hour `watchTTL` reuses fresh documents and queues stale or unseen URLs.
-- Search results are returned from the current index while crawl jobs run asynchronously. The API includes per-URL crawl outcomes and retry/TTL metadata; newly fetched documents become searchable on later queries.
+- Compatibility search mode retrieves up to 10 documents from the shared D1 FTS5 index and refreshes matching URLs through `rewide-machine`.
+- Opt-in discovery-first mode sends the query to a separately configured Discovery provider, submits discovered URLs to `rewide-machine`, waits for crawl jobs to finish through a poll endpoint, and only then queries Rewide's own fetched-document index.
+- The shared D1 database is the authority for the 24-hour `watchTTL` and error-aware retry state. Fresh documents are reused; only missing or expired documents are queued.
+- Per-URL crawl decisions and retry metadata are returned by the API. Provider titles and snippets are not used as Rewide search results; Rewide displays documents fetched and indexed by its own crawler.
 - Recently failed URLs have a separate error-aware retry cooldown, so a robots denial or persistent fetch failure is not retried on every search.
 - Search can only find URLs already present in the document or discovery index. A new installation still needs an initial seed import; the Tranco importer in `rewide-machine` is a manual, bounded option and runs as a dry-run unless `--submit` is specified.
 - Search results are rendered in the existing home-page interface.
@@ -81,6 +82,12 @@ The canonical endpoint is `GET /api/v1/search?q=<query>`. The existing website c
 The endpoint is public, read-only, and supports cross-origin browser requests. It does not require authentication. Crawler credentials are only used server-side and are never returned to callers.
 
 Search uses lexical full-text matching: normalized query terms are combined with AND, indexed title and description fields receive higher relevance weight than body text, and at most 10 indexable documents are returned. Document and discovery result sets are merged using reciprocal-rank fusion. This is the retrieval foundation, not the final R/Q/B ranking system.
+
+### Discovery-first search pipeline
+
+Discovery-first mode is staged behind `REWIDE_DISCOVERY_ENABLED=true`. It requires an HTTPS provider endpoint implementing [the Discovery contract](./docs/discovery-provider-contract.md). The provider must permit Rewide to retain candidate URLs and build a public search index from pages fetched independently by Rewide. No third-party provider is enabled by default.
+
+The search endpoint returns a `pollUrl` while crawl jobs are queued. The website polls the status endpoint without repeating the Discovery request. Once all jobs are terminal, Rewide queries the shared D1 FTS index and returns the fetched documents.
 
 ### On-demand crawler integration
 

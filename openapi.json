@@ -44,23 +44,8 @@
                     "value": {
                       "apiVersion": 1,
                       "query": "example domain",
-                      "count": 1,
-                      "results": [
-                        {
-                          "position": 1,
-                          "resultType": "document",
-                          "indexStatus": "INDEXABLE",
-                          "url": "https://example.com/",
-                          "title": "Example Domain",
-                          "description": "",
-                          "snippet": "Example Domain …",
-                          "canonicalUrl": null,
-                          "language": "en",
-                          "fetchedAt": "2026-11-15T00:00:00.000Z",
-                          "sourceUrl": null,
-                          "discoveredAt": null
-                        }
-                      ],
+                      "count": 0,
+                      "results": [],
                       "crawl": {
                         "enabled": true,
                         "requested": 1,
@@ -78,7 +63,14 @@
                             "jobId": "d5b8b33b-ef33-4b39-90aa-e4cd0848a4c4"
                           }
                         ]
-                      }
+                      },
+                      "mode": "discovery-first",
+                      "discovery": {
+                        "enabled": true,
+                        "requested": 1
+                      },
+                      "pending": true,
+                      "pollUrl": "/api/v1/search/status?q=example%20domain&jobId=d5b8b33b-ef33-4b39-90aa-e4cd0848a4c4"
                     }
                   }
                 }
@@ -105,6 +97,16 @@
               }
             }
           },
+          "502": {
+            "description": "The configured Discovery provider request failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Search database binding is unavailable.",
             "content": {
@@ -120,6 +122,92 @@
       "options": {
         "operationId": "preflightSearch",
         "summary": "CORS preflight for search",
+        "responses": {
+          "204": {
+            "description": "Cross-origin GET requests are allowed. No credentials are enabled."
+          }
+        }
+      }
+    },
+    "/api/v1/search/status": {
+      "get": {
+        "operationId": "getSearchCrawlStatus",
+        "summary": "Wait for discovery-first crawl jobs and retrieve indexed results",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "query",
+            "required": true,
+            "description": "Repeat for each crawl job; between 1 and 10 UUIDs are accepted.",
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending job state or matching indexed documents once all jobs are terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or job IDs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Search status or result retrieval failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database or crawler status binding is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "preflightSearchStatus",
+        "summary": "CORS preflight for search status polling",
         "responses": {
           "204": {
             "description": "Cross-origin GET requests are allowed. No credentials are enabled."
@@ -161,6 +249,37 @@
           },
           "crawl": {
             "$ref": "#/components/schemas/CrawlSummary"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "indexed-legacy",
+              "discovery-first"
+            ]
+          },
+          "discovery": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "enabled",
+              "requested"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "requested": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            }
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "pollUrl": {
+            "type": "string"
           }
         }
       },
@@ -330,7 +449,19 @@
                   "QUERY_TOO_LONG",
                   "QUERY_TOO_COMPLEX",
                   "SEARCH_QUERY_FAILED",
-                  "SEARCH_BACKEND_UNAVAILABLE"
+                  "SEARCH_BACKEND_UNAVAILABLE",
+                  "DISCOVERY_NOT_CONFIGURED",
+                  "DISCOVERY_URL_INVALID",
+                  "DISCOVERY_FETCH_UNAVAILABLE",
+                  "DISCOVERY_PROVIDER_UNAVAILABLE",
+                  "DISCOVERY_PROVIDER_FAILED",
+                  "DISCOVERY_RATE_LIMITED",
+                  "DISCOVERY_RESPONSE_INVALID",
+                  "DISCOVERY_REQUEST_INVALID",
+                  "CRAWLER_NOT_CONFIGURED",
+                  "CRAWLER_URL_INVALID",
+                  "CRAWLER_FETCH_UNAVAILABLE",
+                  "INVALID_CRAWL_JOBS"
                 ]
               },
               "message": {
@@ -401,6 +532,100 @@
             ],
             "minimum": 100,
             "maximum": 599
+          }
+        }
+      },
+      "SearchJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "jobId",
+          "status"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "unknown"
+            ]
+          },
+          "pagesCrawled": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pagesFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pagesSkipped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiVersion",
+          "query",
+          "pending",
+          "jobs",
+          "count",
+          "results"
+        ],
+        "properties": {
+          "apiVersion": {
+            "const": 1
+          },
+          "query": {
+            "type": "string"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "jobs": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/SearchJob"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "results": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
           }
         }
       }

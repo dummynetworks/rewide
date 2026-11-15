@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GET } from '../src/routes/api/search/+server.js';
+import { GET as getSearchStatus } from '../src/routes/api/v1/search/status/+server.js';
 
 function makeEvent(query, database, fetcher, crawlerEnv = {}) {
   const url = new URL('https://rewide.example/api/search');
@@ -400,4 +401,198 @@ test('does not fail search when the crawler endpoint rejects or is unavailable',
     retryAfterAt: null,
     httpStatus: 401,
   }]);
+});
+
+
+test('discovery-first search discovers URLs before submitting crawl jobs and does not show un-fetched results', async () => {
+  const database = createDatabase([{
+    url: 'https://example.com/human',
+    title: 'Human knowledge',
+    description: 'A fetched document',
+    snippet: 'A fetched result',
+    canonicalUrl: null,
+    language: 'en',
+    fetchedAt: '2026-11-15T00:00:00.000Z',
+    relevance: -1,
+  }]);
+  const calls = [];
+  const fetcher = async (input, init) => {
+    const target = String(input);
+    calls.push({ target, init });
+
+    if (target === 'https://discovery.example/v1/discover') {
+      return new Response(JSON.stringify({
+        results: [
+          { url: 'https://example.com/human' },
+          { url: 'https://example.com/human#section' },
+        ],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+
+    if (target === 'https://rewide-machine.dummynet.workers.dev/v1/crawl') {
+      return new Response(JSON.stringify({
+        jobId: '00000000-0000-4000-8000-000000000041',
+        url: 'https://example.com/human',
+        status: 'queued',
+      }), { status: 202, headers: { 'content-type': 'application/json' } });
+    }
+
+    throw new Error('Unexpected request: ' + target);
+  };
+
+  const response = await GET(makeEvent('human', database, fetcher, {
+    REWIDE_DISCOVERY_ENABLED: 'true',
+    REWIDE_DISCOVERY_URL: 'https://discovery.example/v1/discover',
+    REWIDE_DISCOVERY_TOKEN: 'test-discovery-token',
+    REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.mode, 'discovery-first');
+  assert.equal(body.pending, true);
+  assert.equal(body.count, 0);
+  assert.deepEqual(body.results, []);
+  assert.equal(body.discovery.requested, 1);
+  assert.equal(body.crawl.queued, 1);
+  assert.match(body.pollUrl, /^\/api\/v1\/search\/status\?/);
+  assert.match(body.pollUrl, /jobId=00000000-0000-4000-8000-000000000041/);
+  assert.equal(calls[0].target, 'https://discovery.example/v1/discover');
+  assert.equal(calls[0].init.headers.authorization, 'Bearer test-discovery-token');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { query: 'human', limit: 10 });
+  assert.equal(calls[1].target, 'https://rewide-machine.dummynet.workers.dev/v1/crawl');
+  assert.equal(database.calls.length, 0, 'D1 document search must wait until crawl completion');
+});
+
+test('discovery-first search returns D1 documents immediately when every URL is already fresh', async () => {
+  const database = createDatabase([{
+    url: 'https://example.com/human',
+    title: 'Human knowledge',
+    description: '',
+    snippet: 'Fetched page',
+    canonicalUrl: null,
+    language: 'en',
+    fetchedAt: '2026-11-15T00:00:00.000Z',
+    relevance: -1,
+  }]);
+  const fetcher = async (input) => {
+    const target = String(input);
+    if (target === 'https://discovery.example/v1/discover') {
+      return new Response(JSON.stringify({
+        results: [{ url: 'https://example.com/human' }],
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      url: 'https://example.com/human',
+      status: 'fresh',
+      fetchedAt: '2026-11-15T00:00:00.000Z',
+      ttlExpiresAt: '2026-11-16T00:00:00.000Z',
+    }), { status: 200 });
+  };
+
+  const response = await GET(makeEvent('human', database, fetcher, {
+    REWIDE_DISCOVERY_ENABLED: 'true',
+    REWIDE_DISCOVERY_URL: 'https://discovery.example/v1/discover',
+    REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.pending, false);
+  assert.equal(body.count, 1);
+  assert.equal(body.results[0].title, 'Human knowledge');
+  assert.equal(body.crawl.fresh, 1);
+  assert.equal(body.results[0].resultType, 'document');
+});
+
+test('discovery-first search refuses to silently fall back when its provider is not configured', async () => {
+  const response = await GET(makeEvent('human', createDatabase(), undefined, {
+    REWIDE_DISCOVERY_ENABLED: 'true',
+    REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error.code, 'DISCOVERY_NOT_CONFIGURED');
+});
+
+test('search status endpoint returns indexed documents only after every crawl job is terminal', async () => {
+  const database = createDatabase([{
+    url: 'https://example.com/human',
+    title: 'Human knowledge',
+    description: '',
+    snippet: 'Crawled content',
+    canonicalUrl: null,
+    language: 'en',
+    fetchedAt: '2026-11-15T00:00:00.000Z',
+    relevance: -1,
+  }]);
+  const url = new URL('https://rewide.example/api/v1/search/status');
+  url.searchParams.set('q', 'human');
+  url.searchParams.append('jobId', '00000000-0000-4000-8000-000000000041');
+  const fetcher = async (input, init) => {
+    assert.equal(String(input), 'https://rewide-machine.dummynet.workers.dev/v1/jobs/00000000-0000-4000-8000-000000000041');
+    assert.equal(init.method, 'GET');
+    return new Response(JSON.stringify({
+      id: '00000000-0000-4000-8000-000000000041',
+      url: 'https://example.com/human',
+      status: 'completed',
+      pages_crawled: 1,
+      pages_failed: 0,
+      pages_skipped: 0,
+      error_code: null,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  const response = await getSearchStatus({
+    url,
+    platform: {
+      env: {
+        REWIDE_DB: database,
+        REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+      },
+    },
+    fetch: fetcher,
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.pending, false);
+  assert.equal(body.count, 1);
+  assert.equal(body.results[0].title, 'Human knowledge');
+  assert.equal(body.jobs[0].status, 'completed');
+});
+
+test('search status endpoint does not query documents while crawl jobs are running', async () => {
+  const database = createDatabase([{
+    url: 'https://example.com/human',
+    title: 'Should not be visible yet',
+    description: '',
+    snippet: 'Still pending',
+    canonicalUrl: null,
+    language: 'en',
+    fetchedAt: '2026-11-15T00:00:00.000Z',
+    relevance: -1,
+  }]);
+  const url = new URL('https://rewide.example/api/v1/search/status?q=human&jobId=00000000-0000-4000-8000-000000000041');
+  const response = await getSearchStatus({
+    url,
+    platform: {
+      env: {
+        REWIDE_DB: database,
+        REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+      },
+    },
+    fetch: async () => new Response(JSON.stringify({
+      id: '00000000-0000-4000-8000-000000000041',
+      url: 'https://example.com/human',
+      status: 'running',
+    }), { status: 200, headers: { 'content-type': 'application/json' } }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.pending, true);
+  assert.deepEqual(body.results, []);
+  assert.equal(database.calls.length, 0);
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { rankSearchResults } from '../src/lib/server/search/ranking.js';
 import { createSearchService } from '../src/lib/server/search/service.js';
 import { createRewideMachineClient } from '../src/lib/server/integrations/rewide-machine-client.js';
+import { createHttpDiscoveryClient } from '../src/lib/server/integrations/http-discovery-client.js';
 import { GET as legacySearch } from '../src/routes/api/search/+server.js';
 import { GET as versionedSearch, OPTIONS as versionedOptions } from '../src/routes/api/v1/search/+server.js';
 import { OPTIONS as legacyOptions } from '../src/routes/api/search/+server.js';
@@ -295,4 +296,103 @@ test('search API supports public cross-origin GET preflight without credentials'
   assert.equal(response.headers.get('access-control-allow-methods'), 'GET, OPTIONS');
   assert.equal(response.headers.get('access-control-allow-headers'), 'Accept');
   assert.equal(response.headers.get('access-control-allow-credentials'), null);
+});
+
+
+test('HTTP discovery adapter normalizes and deduplicates candidate URLs', async () => {
+  let request;
+  const client = createHttpDiscoveryClient({
+    endpoint: 'https://discovery.example/v1/discover',
+    token: 'discovery-test-token',
+    fetcher: async (url, init) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({
+        results: [
+          { url: 'https://example.com/page#top', title: 'Ignored provider title' },
+          { url: 'https://example.com/page' },
+          { url: 'javascript:alert(1)' },
+          { url: 'https://user:password@example.com/private' },
+          { url: 'https://other.example/article' },
+        ],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+
+  const result = await client.discover('human', { limit: 10 });
+
+  assert.deepEqual(result, {
+    enabled: true,
+    requested: 2,
+    urls: [
+      'https://example.com/page',
+      'https://other.example/article',
+    ],
+  });
+  assert.equal(request.url, 'https://discovery.example/v1/discover');
+  assert.equal(request.init.headers.authorization, 'Bearer discovery-test-token');
+  assert.deepEqual(JSON.parse(request.init.body), { query: 'human', limit: 10 });
+});
+
+test('HTTP discovery adapter reports missing and invalid endpoints without making requests', async () => {
+  let called = false;
+  const missing = createHttpDiscoveryClient({
+    fetcher: async () => { called = true; },
+  });
+  const invalid = createHttpDiscoveryClient({
+    endpoint: 'http://discovery.example/v1/discover',
+    fetcher: async () => { called = true; },
+  });
+
+  assert.deepEqual(await missing.discover('human'), {
+    enabled: false,
+    reason: 'DISCOVERY_NOT_CONFIGURED',
+    requested: 0,
+    urls: [],
+  });
+  assert.deepEqual(await invalid.discover('human'), {
+    enabled: false,
+    reason: 'DISCOVERY_URL_INVALID',
+    requested: 0,
+    urls: [],
+  });
+  assert.equal(called, false);
+});
+
+test('Rewide Machine client reads crawl job statuses with server-side credentials', async () => {
+  let request;
+  const client = createRewideMachineClient({
+    token: 'test-crawler-token-that-is-at-least-24-chars',
+    fetcher: async (url, init) => {
+      request = { url: String(url), init };
+      return new Response(JSON.stringify({
+        id: '00000000-0000-4000-8000-000000000041',
+        url: 'https://example.com/',
+        status: 'completed',
+        pages_crawled: 1,
+        pages_failed: 0,
+        pages_skipped: 0,
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+
+  const result = await client.getJobStatuses([
+    '00000000-0000-4000-8000-000000000041',
+  ]);
+
+  assert.equal(result.enabled, true);
+  assert.deepEqual(result.jobs, [{
+    jobId: '00000000-0000-4000-8000-000000000041',
+    url: 'https://example.com/',
+    status: 'completed',
+    pagesCrawled: 1,
+    pagesFailed: 0,
+    pagesSkipped: 0,
+    errorCode: null,
+  }]);
+  assert.equal(
+    request.url,
+    'https://rewide-machine.dummynet.workers.dev/v1/jobs/00000000-0000-4000-8000-000000000041',
+  );
+  assert.equal(request.init.method, 'GET');
+  assert.equal(request.init.headers.authorization, 'Bearer test-crawler-token-that-is-at-least-24-chars');
 });

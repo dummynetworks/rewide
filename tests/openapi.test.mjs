@@ -10,6 +10,8 @@ test('OpenAPI definition uses version 3.1 and declares the stable search routes'
   assert.equal(specification.openapi, '3.1.0');
   assert.ok(specification.paths['/api/v1/search'].get);
   assert.ok(specification.paths['/api/v1/search'].options);
+  assert.ok(specification.paths['/api/v1/search/status'].get);
+  assert.ok(specification.paths['/api/v1/search/status'].options);
   assert.equal(specification.paths['/api/v1/search'].get.operationId, 'searchWeb');
   assert.ok(specification.paths['/api/v1/search'].get.parameters.some(
     (parameter) => parameter.name === 'q' && parameter.required === true,
@@ -35,11 +37,14 @@ test('OpenAPI success schema matches the public v1 response envelope', () => {
     specification.components.schemas.CrawlTarget.required,
     ['url', 'status', 'reason', 'retryAfterAt'],
   );
+  assert.ok(specification.components.schemas.SearchResponse.properties.pending);
+  assert.ok(specification.components.schemas.SearchResponse.properties.pollUrl);
+  assert.ok(specification.components.schemas.SearchStatusResponse);
 });
 
 test('OpenAPI defines the same error statuses and codes as the HTTP adapter', () => {
   const responses = specification.paths['/api/v1/search'].get.responses;
-  assert.deepEqual(Object.keys(responses).sort(), ['200', '400', '500', '503']);
+  assert.deepEqual(Object.keys(responses).sort(), ['200', '400', '500', '502', '503']);
   assert.deepEqual(
     specification.components.schemas.ErrorResponse.properties.error.properties.code.enum,
     [
@@ -48,6 +53,18 @@ test('OpenAPI defines the same error statuses and codes as the HTTP adapter', ()
       'QUERY_TOO_COMPLEX',
       'SEARCH_QUERY_FAILED',
       'SEARCH_BACKEND_UNAVAILABLE',
+      'DISCOVERY_NOT_CONFIGURED',
+      'DISCOVERY_URL_INVALID',
+      'DISCOVERY_FETCH_UNAVAILABLE',
+      'DISCOVERY_PROVIDER_UNAVAILABLE',
+      'DISCOVERY_PROVIDER_FAILED',
+      'DISCOVERY_RATE_LIMITED',
+      'DISCOVERY_RESPONSE_INVALID',
+      'DISCOVERY_REQUEST_INVALID',
+      'CRAWLER_NOT_CONFIGURED',
+      'CRAWLER_URL_INVALID',
+      'CRAWLER_FETCH_UNAVAILABLE',
+      'INVALID_CRAWL_JOBS',
     ],
   );
 });

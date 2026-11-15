@@ -164,6 +164,75 @@ export function createRewideMachineClient({
   const submit = typeof fetcher === 'function' ? fetcher : null;
 
   return Object.freeze({
+    async getJobStatuses(jobIds) {
+      if (!configuredToken) {
+        return { enabled: false, reason: 'CRAWLER_NOT_CONFIGURED', jobs: [] };
+      }
+      if (!endpoint) {
+        return { enabled: false, reason: 'CRAWLER_URL_INVALID', jobs: [] };
+      }
+      if (!submit) {
+        return { enabled: false, reason: 'CRAWLER_FETCH_UNAVAILABLE', jobs: [] };
+      }
+
+      const ids = [...new Set(
+        (Array.isArray(jobIds) ? jobIds : [])
+          .filter((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)),
+      )].slice(0, MAX_CRAWL_SUBMISSIONS);
+
+      const jobs = await Promise.all(ids.map(async (jobId) => {
+        try {
+          const jobUrl = new URL('/v1/jobs/' + jobId, endpoint).href;
+          const response = await submit(jobUrl, {
+            method: 'GET',
+            headers: {
+              authorization: 'Bearer ' + token,
+              accept: 'application/json',
+            },
+            signal: typeof AbortSignal !== 'undefined'
+              && typeof AbortSignal.timeout === 'function'
+              ? AbortSignal.timeout(timeoutMs)
+              : undefined,
+          });
+
+          const payload = await response.json().catch(() => null);
+          if (response.status === 404) {
+            return { jobId, status: 'failed', reason: 'JOB_NOT_FOUND' };
+          }
+          if (
+            !response.ok
+            || payload === null
+            || typeof payload !== 'object'
+            || Array.isArray(payload)
+          ) {
+            return { jobId, status: 'unknown', reason: 'JOB_STATUS_UNAVAILABLE' };
+          }
+
+          return {
+            jobId,
+            url: typeof payload.url === 'string' ? payload.url : null,
+            status: typeof payload.status === 'string' ? payload.status : 'unknown',
+            pagesCrawled: Number.isInteger(payload.pages_crawled)
+              ? payload.pages_crawled
+              : 0,
+            pagesFailed: Number.isInteger(payload.pages_failed)
+              ? payload.pages_failed
+              : 0,
+            pagesSkipped: Number.isInteger(payload.pages_skipped)
+              ? payload.pages_skipped
+              : 0,
+            errorCode: typeof payload.error_code === 'string'
+              ? payload.error_code
+              : null,
+          };
+        } catch {
+          return { jobId, status: 'unknown', reason: 'JOB_STATUS_UNAVAILABLE' };
+        }
+      }));
+
+      return { enabled: true, jobs };
+    },
+
     async requestCrawls(urls, { maxPages = 1, maxDepth = 0 } = {}) {
       if (!configuredToken) return emptySummary('CRAWLER_NOT_CONFIGURED');
       if (!endpoint) return emptySummary('CRAWLER_URL_INVALID');

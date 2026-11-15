@@ -51,7 +51,7 @@ if (!response.ok) {
 console.log(payload.results);
 ```
 
-The endpoint is read-only from the client's perspective. Search refreshes eligible result URLs asynchronously on the server; clients do not receive or need the crawler token.
+The endpoint is read-only from the client's perspective. In discovery-first mode, the server discovers candidate URLs, submits them to the crawler, and returns a poll URL while Queue jobs are running. The client does not receive or need the crawler or Discovery credentials.
 
 ## Successful response
 
@@ -111,6 +111,23 @@ HTTP `200`:
 | `canonicalUrl`, `language`, `fetchedAt` | Fetched-document metadata; null for discovery-only results |
 | `sourceUrl`, `discoveredAt` | Discovery metadata; null for fetched-document results |
 
+### Discovery-first mode
+
+Discovery-first mode is enabled only when the Pages production environment has `REWIDE_DISCOVERY_ENABLED=true` and a valid `REWIDE_DISCOVERY_URL` configured. The endpoint then performs these steps in order:
+
+1. Send the query to the configured Discovery endpoint.
+2. Normalize and deduplicate at most 10 candidate URLs.
+3. Submit each candidate to `rewide-machine`.
+4. Let the Worker consult the shared D1 database's `watchTTL` and error-aware retry state.
+5. Wait for any queued or already-active crawl jobs to reach a terminal state.
+6. Search the fetched-document FTS index and return the resulting documents.
+
+While one or more jobs are queued or running, the response has `pending: true`, an empty `results` array, and a `pollUrl`. The website polls that URL; it does not call Discovery again. The status endpoint returns indexed documents only after all supplied jobs are terminal.
+
+The Discovery endpoint is a separately operated HTTPS service. It must accept `POST` JSON with `query` and `limit`, and return `{ "results": [{ "url": "https://example.com/" }] }`. Only candidate URLs are passed to the crawler; provider titles and snippets are not used as Rewide search results. The provider must explicitly permit retaining candidate URLs and using them to fetch, store, and index the resulting pages in a public search application. Do not connect a provider whose terms prohibit search-index creation or using its output to build a competing search service.
+
+When discovery-first mode is disabled, the compatibility indexed-search mode remains active. This keeps current production search available until an approved provider is configured.
+
 ### Crawl summary fields
 
 Crawl submission is a best-effort side effect. A crawler outage does not turn a successful retrieval into a failed search response.
@@ -126,6 +143,8 @@ Crawl submission is a best-effort side effect. A crawler outage does not turn a 
 | `cooldown` | Failed URLs waiting for their retry time |
 | `failed` | Submissions that could not be accepted or completed |
 | `targets` | Per-URL decisions, in submission order; empty when crawler integration is disabled |
+| `pending` | Whether discovery-first mode is waiting for queued crawl jobs |
+| `pollUrl` | Status endpoint URL to poll while queued jobs are running |
 
 Each `targets` entry contains `url`, `status`, `reason`, and `retryAfterAt`. The status is one of `fresh`, `queued`, `deduplicated`, `cooldown`, or `failed`. `retryAfterAt` is an ISO 8601 timestamp when a retry is deferred, otherwise `null`.
 
@@ -139,6 +158,14 @@ Additional fields are included when the Worker provides them:
 | `httpStatus` | HTTP status returned by the crawler Worker for a failed request |
 
 The `reason` is a stable machine-readable classification. For a cooldown it uses the previous crawl's error code when available, such as `ROBOTS_DISALLOWED`; otherwise it uses `PREVIOUS_CRAWL_FAILURE`. Queue outcomes use `CRAWL_QUEUED` or `ACTIVE_CRAWL_EXISTS`. Failed Worker responses use the Worker error code or an `HTTP_<status>` fallback. A malformed successful response is reported as `UNEXPECTED_CRAWLER_RESPONSE`, and a transport exception as `CRAWLER_REQUEST_FAILED`.
+
+## Search status endpoint
+
+`GET /api/v1/search/status?q=<query>&jobId=<uuid>`
+
+Repeat the `jobId` parameter for each job, up to 10. This endpoint reads job status through the server-side crawler adapter. It never triggers Discovery or creates new crawl jobs.
+
+While any job is `queued`, `running`, or temporarily unreachable, it returns `pending: true` and no results. Once every job is `completed` or `failed`, the endpoint queries the D1 document index and returns the matching fetched documents.
 
 ## Error response
 
@@ -161,6 +188,9 @@ All errors use the same envelope:
 | `400` | `QUERY_TOO_COMPLEX` | More than 12 searchable terms |
 | `500` | `SEARCH_QUERY_FAILED` | Required document retrieval failed |
 | `503` | `SEARCH_BACKEND_UNAVAILABLE` | Pages D1 binding is missing |
+| `502` | `DISCOVERY_PROVIDER_FAILED` | Discovery provider request failed |
+| `503` | `DISCOVERY_NOT_CONFIGURED` | Discovery-first mode has no configured provider |
+| `503` | `CRAWLER_NOT_CONFIGURED` | Crawler credentials or endpoint are unavailable |
 
 ## CORS
 
@@ -191,5 +221,11 @@ The website and external clients depend on this API contract, not on D1 tables o
 | `REWIDE_DB` | Cloudflare D1 | Yes |
 | `REWIDE_CRAWLER_URL` | HTTPS URL variable | No |
 | `REWIDE_CRAWLER_TOKEN` | Secret matching `rewide-machine`'s `DUMMYNET_TOKEN` | No |
+| `REWIDE_DISCOVERY_ENABLED` | Set to `true` to enable discovery-first mode | No |
+| `REWIDE_DISCOVERY_URL` | HTTPS endpoint implementing the Rewide Discovery HTTP contract | No |
+| `REWIDE_DISCOVERY_TOKEN` | Optional Bearer token for the Discovery endpoint | No |
 
 Without crawler credentials, retrieval still works and the response reports a disabled crawler integration. The endpoint never exposes the crawler token to browser code.
+
+
+For the complete request and response contract expected from a Discovery service, see [the Discovery provider contract](./discovery-provider-contract.md).
