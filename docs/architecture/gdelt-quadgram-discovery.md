@@ -13,8 +13,9 @@ This boundary is deliberate:
 
 ## Processing
 
-1. Obtain one NGRAMS and TOC pair for the exact same UTC timestamp from the GDELT public data directory.
-2. Run the local scanner against the pair and the user's query.
+1. Run the CLI with `--latest`; it probes recent UTC timestamps newest-first, beginning five minutes in the past, until it finds a complete NGRAMS/TOC pair.
+2. The downloader skips expected HTTP 404 responses, but aborts on rate-limit or server errors rather than retrying aggressively.
+3. Run the local scanner against the downloaded pair and the user's query.
 3. Match one-to-four-word phrases against quadgrams.
 4. Resolve matching document IDs through the paired TOC and normalize/deduplicate URLs.
 5. Optionally submit selected URLs to Rewide Machine, one at a time.
@@ -32,6 +33,6 @@ This boundary is deliberate:
 
 ## Implementation
 
-The standalone Node.js utility lives in tools/gdelt-discovery. It uses only Node.js built-ins, reads gzip or plain-text files, streams rows, and writes candidate JSONL. The optional submit flag talks only to the user's own Rewide Machine Worker and requires its existing secret.
+The standalone Node.js utility lives in tools/gdelt-discovery. It uses only Node.js built-ins, can locate and download one recent complete file pair with bounded sequential requests, reads gzip or plain-text files, streams rows, and writes candidate JSONL. The optional submit flag talks only to the user's own Rewide Machine Worker and requires its existing secret.
 
 Tests live in tests/gdelt-discovery.test.mjs and use local gzip fixtures and mocked Worker responses.
