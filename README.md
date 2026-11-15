@@ -89,6 +89,18 @@ Discovery-first mode is staged behind `REWIDE_DISCOVERY_ENABLED=true`. It requir
 
 The search endpoint returns a `pollUrl` while crawl jobs are queued. The website polls the status endpoint without repeating the Discovery request. Once all jobs are terminal, Rewide queries the shared D1 FTS index and returns the fetched documents.
 
+### Optional offline GDELT news discovery
+
+Rewide includes an optional local importer for GDELT Web NGrams quadgram snapshots. It scans a matching NGRAMS/TOC file pair on the developer's machine and extracts candidate news URLs for a one-to-four-word phrase. It does not call a GDELT search API, download files automatically, or connect itself to the public search request path.
+
+The importer can optionally submit selected URL candidates to the existing Rewide Machine Worker. The Worker remains responsible for URL validation, robots.txt, noindex, TTL, retry cooldowns, and fetching the original pages. Only Rewide-fetched documents become normal search results.
+
+- Tool guide: [tools/gdelt-discovery/README.md](./tools/gdelt-discovery/README.md)
+- Architecture decision: [docs/architecture/gdelt-quadgram-discovery.md](./docs/architecture/gdelt-quadgram-discovery.md)
+- CLI help: `npm run discover:gdelt -- --help`
+
+This is news discovery only, not general web discovery. GDELT's public data files are free to access, but Rewide does not assume unlimited upstream bandwidth or availability.
+
 ### On-demand crawler integration
 
 The Pages project can submit result URLs to the existing `rewide-machine` Worker without exposing credentials to browser code. Configure these server-side bindings in the Pages production environment:
