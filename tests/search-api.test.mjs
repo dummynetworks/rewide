@@ -154,6 +154,41 @@ test('keeps matching referring-link text when the fetched target document does n
   assert.equal(body.results[0].indexStatus, 'UNKNOWN');
 });
 
+test('keeps indexed-document results when the optional discovery FTS query fails', async () => {
+  const database = {
+    prepare(sql) {
+      return {
+        bind() {
+          return {
+            async all() {
+              if (sql.includes('discovered_urls_fts')) {
+                throw new Error('no such table: discovered_urls_fts');
+              }
+              return { results: [{
+                url: 'https://example.com/',
+                title: 'Example Domain',
+                description: 'Documentation example',
+                snippet: 'Example result',
+                canonicalUrl: null,
+                language: 'en',
+                fetchedAt: '2026-11-14T00:00:00.000Z',
+                relevance: -1,
+              }] };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const response = await GET(makeEvent('example', database));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.count, 1);
+  assert.equal(body.results[0].title, 'Example Domain');
+});
+
 test('treats FTS operators as literal search terms', async () => {
   const database = createDatabase();
   await GET(makeEvent('cats OR dogs', database));
