@@ -108,9 +108,23 @@ test('returns discovered URLs without treating UNKNOWN as confirmed indexable', 
     relevance: -2,
   }]);
   let crawlerCalled = false;
-  const fetcher = async () => {
+  const fetcher = async (input, init) => {
     crawlerCalled = true;
-    throw new Error('A discovered-only URL must not be automatically recrawled.');
+    assert.equal(String(input), 'https://rewide-machine.dummynet.workers.dev/v1/crawl');
+    assert.equal(init.method, 'POST');
+    assert.deepEqual(JSON.parse(init.body), {
+      url: 'https://example.com/private',
+      maxPages: 1,
+      maxDepth: 0,
+    });
+    return new Response(JSON.stringify({
+      jobId: 'job-discovered-123',
+      url: 'https://example.com/private',
+      status: 'queued',
+    }), {
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+    });
   };
 
   const response = await GET(makeEvent('private documentation', database, fetcher, {
@@ -127,8 +141,9 @@ test('returns discovered URLs without treating UNKNOWN as confirmed indexable', 
   assert.equal(body.results[0].fetchedAt, null);
   assert.equal(body.results[0].sourceUrl, 'https://example.com/');
   assert.equal(body.crawl.enabled, true);
-  assert.equal(body.crawl.requested, 0);
-  assert.equal(crawlerCalled, false);
+  assert.equal(body.crawl.requested, 1);
+  assert.equal(body.crawl.queued, 1);
+  assert.equal(crawlerCalled, true);
 });
 
 test('keeps matching referring-link text when the fetched target document does not match', async () => {
