@@ -378,7 +378,12 @@ test('does not fail search when the crawler endpoint rejects or is unavailable',
     fetchedAt: '2026-11-14T00:00:00.000Z',
     relevance: -1,
   }]);
-  const fetcher = async () => new Response('unauthorized', { status: 401 });
+  const fetcher = async () => new Response(JSON.stringify({
+    error: 'UNAUTHORIZED',
+  }), {
+    status: 401,
+    headers: { 'content-type': 'application/json' },
+  });
 
   const response = await GET(makeEvent('example', database, fetcher, {
     REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
