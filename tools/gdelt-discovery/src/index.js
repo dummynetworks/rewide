@@ -179,6 +179,8 @@ export async function scanGdeltSnapshot({
     const docId = Number(record?.ID);
     if (!Number.isSafeInteger(docId) || !matches.has(docId)) continue;
 
+    remainingIds.delete(docId);
+
     if (
       requestedLanguage
       && String(record.lang ?? '').toLowerCase() !== requestedLanguage
@@ -189,7 +191,6 @@ export async function scanGdeltSnapshot({
     const url = normalizeCandidateUrl(record.url);
     if (!url) {
       invalidUrls += 1;
-      remainingIds.delete(docId);
       continue;
     }
 
@@ -214,7 +215,6 @@ export async function scanGdeltSnapshot({
         matchedQuadgrams: match.matchedQuadgrams,
       });
     }
-    remainingIds.delete(docId);
   }
 
   const candidates = [...candidatesByUrl.values()]
