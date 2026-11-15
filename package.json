@@ -11,7 +11,8 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "discover:gdelt": "node tools/gdelt-discovery/src/cli.js"
   },
   "dependencies": {
     "@lucide/svelte": "1.72.0",
