@@ -25,7 +25,7 @@ test('OpenAPI success schema matches the public v1 response envelope', () => {
     specification.components.schemas.SearchResult.required,
     [
       'position', 'resultType', 'indexStatus', 'url', 'title',
-      'description', 'snippet', 'canonicalUrl', 'language', 'fetchedAt',
+      'description', 'snippet', 'canonicalUrl', 'canonicalStatus', 'language', 'fetchedAt',
       'sourceUrl', 'discoveredAt',
     ],
   );

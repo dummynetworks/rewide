@@ -295,6 +295,7 @@
           "description",
           "snippet",
           "canonicalUrl",
+          "canonicalStatus",
           "language",
           "fetchedAt",
           "sourceUrl",
@@ -366,6 +367,22 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "canonicalStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "missing",
+              "self",
+              "same-origin",
+              "cross-origin",
+              "invalid",
+              "unverified",
+              null
+            ],
+            "description": "Classification of the fetched page's rel=canonical metadata. A cross-origin value is advisory and does not replace url."
           }
         }
       },

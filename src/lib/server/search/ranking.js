@@ -22,6 +22,9 @@ function toPublicResult(row, position) {
     description: row.description || '',
     snippet: row.snippet || '',
     canonicalUrl: isDocument ? row.canonicalUrl || null : null,
+    canonicalStatus: isDocument
+      ? row.canonicalStatus || (row.canonicalUrl ? 'unverified' : 'missing')
+      : null,
     language: isDocument ? row.language || null : null,
     fetchedAt: isDocument ? row.fetchedAt || null : null,
     sourceUrl: isDocument ? null : row.sourceUrl || null,
@@ -35,9 +38,9 @@ function toPublicResult(row, position) {
  */
 export function rankSearchResults(documentRows, discoveryRows, { limit = 10 } = {}) {
   const documents = (Array.isArray(documentRows) ? documentRows : []).filter(isRow);
-  const matchedDocumentUrls = new Set(
-    documents.flatMap((row) => [row.url, row.canonicalUrl].filter(Boolean)),
-  );
+  // A rel=canonical declaration is publisher metadata, not proof of a redirect
+  // or duplicate. Only the fetched URL and observed redirect aliases deduplicate.
+  const matchedDocumentUrls = new Set(documents.map((row) => row.url));
 
   const discoveries = (Array.isArray(discoveryRows) ? discoveryRows : [])
     .filter(isRow)

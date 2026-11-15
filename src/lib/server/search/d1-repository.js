@@ -5,6 +5,7 @@ const DOCUMENT_SEARCH_SQL = [
   '  documents.description AS description,',
   "  snippet(documents_fts, 2, '', '', ' … ', 24) AS snippet,",
   '  documents.canonical_url AS canonicalUrl,',
+  '  documents.canonical_status AS canonicalStatus,',
   '  documents.language AS language,',
   '  documents.fetched_at AS fetchedAt,',
   '  bm25(documents_fts, 10.0, 5.0, 1.0) AS relevance',

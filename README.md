@@ -38,6 +38,7 @@ The World Bank Indicators API is public and does not require an API key. The end
 - Recently failed URLs have a separate error-aware retry cooldown, so a robots denial or persistent fetch failure is not retried on every search.
 - Compatibility mode can only find URLs already present in the document or discovery index. A new installation using that mode still needs an initial seed import; the Tranco importer in `rewide-machine` is a manual, bounded option and runs as a dry-run unless `--submit` is specified. Discovery-first mode instead gets candidate URLs from its configured provider.
 - Search results are rendered in the existing home-page interface.
+- Fetched-document results expose `canonicalStatus`; cross-origin canonical declarations remain advisory metadata and never replace the URL Rewide fetched.
 - Search binding absence is reported explicitly as `503 SEARCH_BACKEND_UNAVAILABLE`.
 
 ## Requirements
@@ -125,7 +126,7 @@ The rewide Pages project must read the same D1 database used by the crawler:
 
 In Cloudflare, open **Workers & Pages → rewide → Settings → Bindings → Add → D1 database**. Set the variable name to `REWIDE_DB`, select the existing `rewide-machine-db` database, save, and redeploy the Pages project. SvelteKit server endpoints access the binding through `platform.env.REWIDE_DB`.
 
-Before connecting the Pages binding, apply the `0003_documents_fts.sql` migration from the `rewide-machine` repository to the remote D1 database. The migration builds the FTS5 index for documents already stored and installs triggers to keep the index synchronized with later document inserts, updates, and deletes.
+Before connecting the Pages binding, apply all pending migrations from the `rewide-machine` repository to the remote D1 database. `0003_documents_fts.sql` builds and maintains the FTS5 index; `0007_canonical_validation_and_reindex.sql` adds the canonical classification and persisted reindex-job flag. Existing non-empty canonical values are marked `unverified` until fetched again.
 
 ## Geographic data
 

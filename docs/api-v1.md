@@ -72,6 +72,7 @@ HTTP `200`:
       "description": "",
       "snippet": "Example Domain …",
       "canonicalUrl": null,
+      "canonicalStatus": "missing",
       "language": "en",
       "fetchedAt": "2026-11-15T00:00:00.000Z",
       "sourceUrl": null,
@@ -108,8 +109,10 @@ HTTP `200`:
 | `indexStatus` | `INDEXABLE` when confirmed indexable; `UNKNOWN` when the URL has not yet been fetched and classified |
 | `url` | URL clients should open |
 | `title`, `description`, `snippet` | Display metadata; empty values are allowed where data is not known |
-| `canonicalUrl`, `language`, `fetchedAt` | Fetched-document metadata; null for discovery-only results |
+| `canonicalUrl`, `canonicalStatus`, `language`, `fetchedAt` | Fetched-document metadata; null for discovery-only results |
 | `sourceUrl`, `discoveredAt` | Discovery metadata; null for fetched-document results |
+
+Canonical status values are `missing`, `self`, `same-origin`, `cross-origin`, `invalid`, or `unverified`. `cross-origin` means the page declares a canonical URL on a different origin; it is retained as metadata only. Rewide does not redirect to it, replace the result's `url`, or deduplicate another fetched/discovered URL solely because it matches a canonical declaration. `unverified` is used for records saved before canonical classification was introduced.
 
 ### Discovery-first mode
 

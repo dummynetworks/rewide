@@ -16,7 +16,8 @@ test('ranking merges sources, removes document duplicates, and returns the publi
   const results = rankSearchResults([
     {
       url: 'https://example.com/',
-      canonicalUrl: 'https://example.com/',
+      canonicalUrl: 'https://publisher.example/story',
+      canonicalStatus: 'cross-origin',
       title: 'Example',
       description: 'Example description',
       snippet: 'Example snippet',
@@ -36,14 +37,22 @@ test('ranking merges sources, removes document duplicates, and returns the publi
       sourceUrl: 'https://example.com/',
       discoveredAt: '2026-11-15T00:00:00.000Z',
     },
+    {
+      url: 'https://publisher.example/story',
+      title: 'Syndicated page',
+      indexStatus: 'unknown',
+    },
   ]);
 
-  assert.equal(results.length, 2);
+  assert.equal(results.length, 3);
   assert.equal(results[0].resultType, 'document');
   assert.equal(results[0].indexStatus, 'INDEXABLE');
   assert.equal(results[1].resultType, 'discovered');
   assert.equal(results[1].indexStatus, 'UNKNOWN');
   assert.equal(results[1].sourceUrl, 'https://example.com/');
+  assert.equal(results[0].canonicalStatus, 'cross-origin');
+  assert.equal(results[2].url, 'https://publisher.example/story');
+  assert.equal(results[2].canonicalStatus, null);
   assert.deepEqual(Object.keys(results[0]), [
     'position',
     'resultType',
@@ -53,6 +62,7 @@ test('ranking merges sources, removes document duplicates, and returns the publi
     'description',
     'snippet',
     'canonicalUrl',
+    'canonicalStatus',
     'language',
     'fetchedAt',
     'sourceUrl',
