@@ -80,7 +80,7 @@ export async function GET({ url, platform, fetch }) {
   }
 
   try {
-    const [documentResult, discoveryResult] = await Promise.all([
+    const [documentOutcome, discoveryOutcome] = await Promise.allSettled([
       database.prepare(`
         SELECT
           documents.url AS url,
@@ -125,6 +125,24 @@ export async function GET({ url, platform, fetch }) {
         LIMIT ?
       `).bind(matchExpression, MAX_RESULTS).all(),
     ]);
+
+    // Discovered URLs are supplemental. If the optional discovery FTS migration
+    // is not present yet, keep the primary indexed-document search operational.
+    if (documentOutcome.status !== 'fulfilled') {
+      throw documentOutcome.reason;
+    }
+
+    const documentResult = documentOutcome.value;
+    const discoveryResult = discoveryOutcome.status === 'fulfilled'
+      ? discoveryOutcome.value
+      : null;
+
+    if (discoveryOutcome.status !== 'fulfilled') {
+      console.warn(
+        '[rewide] Discovery search is unavailable; returning indexed-document results.',
+        discoveryOutcome.reason,
+      );
+    }
 
     const documentRows = Array.isArray(documentResult?.results) ? documentResult.results : [];
     const matchedDocumentUrls = new Set(
