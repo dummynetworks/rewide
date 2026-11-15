@@ -16,10 +16,17 @@ This boundary is deliberate:
 1. Run the CLI with `--latest`; it probes recent UTC timestamps newest-first, beginning five minutes in the past, until it finds a complete NGRAMS/TOC pair.
 2. The downloader skips expected HTTP 404 responses, but aborts on rate-limit or server errors rather than retrying aggressively.
 3. Match one-to-four-word phrases against quadgrams.
-4. Resolve matching document IDs through the paired TOC and normalize/deduplicate URLs.
-5. Optionally submit selected URLs to Rewide Machine, one at a time.
-6. Rewide Machine independently checks public URL validity, robots.txt, noindex, TTL, retry cooldowns and crawl status.
-7. Rewide search returns only documents actually fetched and indexed by Rewide.
+4. Resolve matching document IDs through the paired TOC, validate URLs without repairing suspicious values, and normalize/deduplicate accepted URLs.
+5. Preserve rejected TOC URL values and stable reason codes through the optional `--rejected-output` JSONL file.
+6. Optionally submit selected URLs to Rewide Machine, one at a time.
+7. Rewide Machine independently checks public URL validity, robots.txt, noindex, TTL, retry cooldowns and crawl status.
+8. Rewide search returns only documents actually fetched and indexed by Rewide.
+
+## URL provenance and validation
+
+GDELT URL values are treated as untrusted source metadata. The adapter rejects suspicious HTML-attribute contamination (for example, an encoded `%20class=` suffix) and raw whitespace/control characters instead of truncating or guessing a corrected URL. The rejected-record JSONL output retains the original value and a stable rejection reason for inspection.
+
+Candidate schema version 2 separates `sourceTimestamp` (the timestamp in the NGRAMS/TOC filename) from `gdeltRecordDate` (the date field in the matching TOC record). The latter is not assumed to be the publisher's publication date.
 
 ## Non-goals
 
