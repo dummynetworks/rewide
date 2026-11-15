@@ -177,10 +177,10 @@ export async function GET({ url, platform, fetch }) {
       || String(left.url).localeCompare(String(right.url))
     )).slice(0, MAX_RESULTS);
 
-    // Only fetched documents are refresh candidates. A discovered-only URL may
-    // already be robots-blocked, so searching it must not cause repeated retries.
+    // Refresh existing documents and crawl matching discovered URLs on demand.
+    // The Worker applies the 24-hour success TTL and failed-URL retry cooldown.
     const crawl = await requestSearchCrawls({
-      documents: documentRows,
+      documents: [...documentRows, ...discoveryRows],
       env: platform?.env,
       fetcher: fetch,
     });
