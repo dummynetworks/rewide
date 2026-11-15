@@ -225,7 +225,7 @@ The website and external clients depend on this API contract, not on D1 tables o
 | `REWIDE_DISCOVERY_URL` | HTTPS endpoint implementing the Rewide Discovery HTTP contract | No |
 | `REWIDE_DISCOVERY_TOKEN` | Optional Bearer token for the Discovery endpoint | No |
 
-Without crawler credentials, retrieval still works and the response reports a disabled crawler integration. The endpoint never exposes the crawler token to browser code.
+In compatibility indexed-search mode, retrieval still works without crawler credentials and the response reports a disabled crawler integration. Discovery-first mode requires both the Discovery endpoint and the crawler credentials. The endpoint never exposes either credential to browser code.
 
 
 For the complete request and response contract expected from a Discovery service, see [the Discovery provider contract](./discovery-provider-contract.md).

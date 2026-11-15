@@ -36,7 +36,7 @@ The World Bank Indicators API is public and does not require an API key. The end
 - The shared D1 database is the authority for the 24-hour `watchTTL` and error-aware retry state. Fresh documents are reused; only missing or expired documents are queued.
 - Per-URL crawl decisions and retry metadata are returned by the API. Provider titles and snippets are not used as Rewide search results; Rewide displays documents fetched and indexed by its own crawler.
 - Recently failed URLs have a separate error-aware retry cooldown, so a robots denial or persistent fetch failure is not retried on every search.
-- Search can only find URLs already present in the document or discovery index. A new installation still needs an initial seed import; the Tranco importer in `rewide-machine` is a manual, bounded option and runs as a dry-run unless `--submit` is specified.
+- Compatibility mode can only find URLs already present in the document or discovery index. A new installation using that mode still needs an initial seed import; the Tranco importer in `rewide-machine` is a manual, bounded option and runs as a dry-run unless `--submit` is specified. Discovery-first mode instead gets candidate URLs from its configured provider.
 - Search results are rendered in the existing home-page interface.
 - Search binding absence is reported explicitly as `503 SEARCH_BACKEND_UNAVAILABLE`.
 
