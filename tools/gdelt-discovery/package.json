@@ -1,0 +1,12 @@
+{
+  "name": "@rewide/gdelt-quadgram-discovery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "scan": "node src/cli.js"
+  }
+}
