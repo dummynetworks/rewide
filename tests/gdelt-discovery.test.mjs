@@ -87,6 +87,9 @@ test('scans the paired GDELT gzip files and de-duplicates normalized URLs', asyn
     assert.equal(result.candidates[0].occurrences, 9);
     assert.equal(result.candidates[0].matchedQuadgrams, 3);
     assert.equal(result.candidates[0].sourceTimestamp, '2026-06-30T20:16:00Z');
+    assert.equal(result.candidates[0].schemaVersion, 2);
+    assert.equal(result.candidates[0].gdeltRecordDate, '2026-06-30T20:16:00.000Z');
+    assert.equal('sourceDate' in result.candidates[0], false);
     assert.equal(result.candidates[1].url, 'https://news.example/korean');
     assert.equal(result.stats.matchedDocuments, 3);
     assert.equal(result.stats.malformedNgramRows, 2);
@@ -220,4 +223,67 @@ test('stops probing when GDELT responds with a rate-limit or server error', asyn
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+
+test('rejects GDELT URLs contaminated with encoded HTML attributes without repairing them', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'rewide-gdelt-contaminated-url-'));
+  const ngramsPath = join(directory, '20261115094700.ngrams.txt');
+  const tocPath = join(directory, '20261115094700.toc.jsonl');
+  const originalUrl = 'https://www.birgun.net/haber/example-746552%20class=';
+  const recordDate = '2026-11-15T09:47:00.000Z';
+
+  try {
+    await writeFile(ngramsPath, '27\tclimate agenda today\t6\n', 'utf8');
+    await writeFile(tocPath, JSON.stringify({
+      ID: 27,
+      date: recordDate,
+      lang: 'en',
+      title: 'The climate agenda',
+      url: originalUrl,
+    }) + '\n', 'utf8');
+
+    const result = await scanGdeltSnapshot({
+      ngramsPath,
+      tocPath,
+      query: 'climate',
+      language: 'en',
+    });
+
+    assert.equal(result.candidates.length, 0);
+    assert.deepEqual(result.rejectedUrls, [{
+      docId: 27,
+      title: 'The climate agenda',
+      originalUrl,
+      originalUrlTruncated: false,
+      reason: 'embedded_html_attribute',
+      gdeltRecordDate: recordDate,
+    }]);
+    assert.equal(result.stats.invalidUrls, 1);
+    assert.equal(result.stats.rejectedUrlRecords, 1);
+    assert.deepEqual(result.stats.rejectedUrlReasons, {
+      embedded_html_attribute: 1,
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('does not submit candidates whose URLs contain a suspicious HTML attribute', async () => {
+  let requests = 0;
+  const result = await submitCandidates([
+    { url: 'https://news.example/article%20class=' },
+  ], {
+    token: 'test-crawler-token-that-is-at-least-24-chars',
+    delayMs: 0,
+    fetcher: async () => {
+      requests += 1;
+      return new Response(JSON.stringify({ status: 'queued' }), { status: 202 });
+    },
+  });
+
+  assert.equal(requests, 0);
+  assert.equal(result.requested, 0);
+  assert.equal(result.submitted, 0);
+  assert.equal(result.notSubmitted, 0);
 });
