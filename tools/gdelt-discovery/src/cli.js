@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanGdeltSnapshot, submitCandidates } from './index.js';
+import { downloadLatestSnapshot } from './downloader.js';
 
 function usage() {
   return [
@@ -13,6 +14,9 @@ function usage() {
     '  --language CODE       Optional GDELT language code, e.g. en or ko',
     '  --limit NUMBER        Maximum candidate URLs (default: 100, max: 1000)',
     '  --output FILE         Write candidate JSONL to a file (default: stdout)',
+    '  --latest              Find and download the newest complete GDELT file pair',
+    '  --data-dir DIRECTORY  Download directory for --latest (default: data/gdelt)',
+    '  --lookback-minutes N  Search recent timestamps (default: 30, max: 180)',
     '  --submit              Submit candidates to the configured Rewide Machine Worker',
     '  --submit-limit NUMBER Maximum submissions (default: 100, max: 1000)',
     '  --delay-ms NUMBER     Delay between Worker submissions (default: 1000)',
@@ -28,6 +32,8 @@ function readOptions(args) {
   const valueOptions = new Set([
     '--ngrams',
     '--toc',
+    '--data-dir',
+    '--lookback-minutes',
     '--query',
     '--language',
     '--limit',
@@ -41,6 +47,10 @@ function readOptions(args) {
     const key = args[index];
     if (key === '--help') {
       options.help = true;
+      continue;
+    }
+    if (key === '--latest') {
+      options.latest = true;
       continue;
     }
     if (key === '--submit') {
@@ -71,13 +81,35 @@ async function main() {
     process.stdout.write(usage());
     return;
   }
-  if (!options.ngrams || !options.toc || !options.query) {
-    throw new Error('--ngrams, --toc, and --query are required.');
+  if (!options.query) {
+    throw new Error('--query is required.');
+  }
+
+  let ngramsPath = options.ngrams ? resolve(options.ngrams) : null;
+  let tocPath = options.toc ? resolve(options.toc) : null;
+
+  if (options.latest) {
+    if (ngramsPath || tocPath) {
+      throw new Error('Use --latest or provide --ngrams and --toc, not both.');
+    }
+
+    const downloaded = await downloadLatestSnapshot({
+      directory: resolve(options.data_dir ?? 'data/gdelt'),
+      lookbackMinutes: parseNumber(options.lookback_minutes, 30, 'lookback-minutes', 1, 180),
+    });
+    ngramsPath = downloaded.ngramsPath;
+    tocPath = downloaded.tocPath;
+    process.stderr.write(
+      'Downloaded ' + downloaded.source + ' snapshot ' + downloaded.stamp
+      + ' after ' + downloaded.attempts + ' timestamp attempt(s).\\n',
+    );
+  } else if (!ngramsPath || !tocPath) {
+    throw new Error('Provide both --ngrams and --toc, or use --latest.');
   }
 
   const result = await scanGdeltSnapshot({
-    ngramsPath: resolve(options.ngrams),
-    tocPath: resolve(options.toc),
+    ngramsPath,
+    tocPath,
     query: options.query,
     language: options.language,
     limit: parseNumber(options.limit, 100, 'limit', 1, 1000),
