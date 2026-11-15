@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { normalizeTokens, scanGdeltSnapshot, submitCandidates } from '../tools/gdelt-discovery/src/index.js';
+import { downloadLatestSnapshot } from '../tools/gdelt-discovery/src/downloader.js';
 
 async function withSnapshot(run) {
   const directory = await mkdtemp(join(tmpdir(), 'rewide-gdelt-'));
@@ -153,4 +154,70 @@ test('submits candidates sequentially and stops on an authentication or service 
     maxPages: 1,
     maxDepth: 0,
   });
+});
+
+
+test('downloads the newest available matching GDELT pair instead of guessing a timestamp', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'rewide-gdelt-download-'));
+  const requests = [];
+  const ngramsBytes = gzipSync('1\tclimate change now\t4\n');
+  const tocBytes = gzipSync(JSON.stringify({
+    ID: 1,
+    date: '2026-11-15T09:54:00.000Z',
+    lang: 'en',
+    title: 'Climate change now',
+    url: 'https://news.example/climate',
+  }) + '\n');
+
+  try {
+    const result = await downloadLatestSnapshot({
+      directory,
+      now: new Date('2026-11-15T10:00:30.000Z'),
+      lookbackMinutes: 3,
+      fetcher: async (url) => {
+        requests.push(String(url));
+        if (String(url).includes('20261115095500')) {
+          return new Response(null, { status: 404 });
+        }
+        if (String(url).includes('20261115095400.ngrams')) {
+          return new Response(ngramsBytes, { status: 200 });
+        }
+        if (String(url).includes('20261115095400.toc')) {
+          return new Response(tocBytes, { status: 200 });
+        }
+        return new Response(null, { status: 404 });
+      },
+    });
+
+    assert.equal(result.stamp, '20261115095400');
+    assert.equal(result.attempts, 2);
+    assert.equal(requests.length, 3);
+    assert.deepEqual(await readFile(result.ngramsPath), ngramsBytes);
+    assert.deepEqual(await readFile(result.tocPath), tocBytes);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('stops probing when GDELT responds with a rate-limit or server error', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'rewide-gdelt-rate-limit-'));
+  let requests = 0;
+
+  try {
+    await assert.rejects(
+      downloadLatestSnapshot({
+        directory,
+        now: new Date('2026-11-15T10:00:30.000Z'),
+        lookbackMinutes: 5,
+        fetcher: async () => {
+          requests += 1;
+          return new Response(null, { status: 429 });
+        },
+      }),
+      /HTTP 429/,
+    );
+    assert.equal(requests, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
