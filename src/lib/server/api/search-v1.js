@@ -3,10 +3,18 @@ import { createD1SearchRepository } from '../search/d1-repository.js';
 import { parseSearchQuery } from '../search/query.js';
 import { createSearchService } from '../search/service.js';
 
+const CORS_HEADERS = Object.freeze({
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'Accept',
+  'access-control-max-age': '86400',
+});
+
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
   'x-content-type-options': 'nosniff',
+  ...CORS_HEADERS,
 };
 
 const MAX_RESULTS = 10;
@@ -15,6 +23,20 @@ function json(data, status) {
   return new Response(JSON.stringify(data), {
     status,
     headers: JSON_HEADERS,
+  });
+}
+
+/**
+ * Public, read-only search API. No user credentials or crawler secrets are
+ * accepted from browser clients; cross-origin access is safe for this endpoint.
+ */
+export function optionsSearchV1() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...CORS_HEADERS,
+      'cache-control': 'public, max-age=86400',
+    },
   });
 }
 

@@ -4,7 +4,8 @@ import { rankSearchResults } from '../src/lib/server/search/ranking.js';
 import { createSearchService } from '../src/lib/server/search/service.js';
 import { createRewideMachineClient } from '../src/lib/server/integrations/rewide-machine-client.js';
 import { GET as legacySearch } from '../src/routes/api/search/+server.js';
-import { GET as versionedSearch } from '../src/routes/api/v1/search/+server.js';
+import { GET as versionedSearch, OPTIONS as versionedOptions } from '../src/routes/api/v1/search/+server.js';
+import { OPTIONS as legacyOptions } from '../src/routes/api/search/+server.js';
 
 test('the unversioned search route is a compatibility alias for v1', () => {
   assert.equal(legacySearch, versionedSearch);
@@ -202,4 +203,19 @@ test('Rewide Machine client always returns the same counters when disabled', asy
     cooldown: 0,
     failed: 0,
   });
+});
+
+
+test('legacy and versioned search routes share the same CORS preflight handler', () => {
+  assert.equal(legacyOptions, versionedOptions);
+});
+
+test('search API supports public cross-origin GET preflight without credentials', async () => {
+  const response = versionedOptions();
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  assert.equal(response.headers.get('access-control-allow-methods'), 'GET, OPTIONS');
+  assert.equal(response.headers.get('access-control-allow-headers'), 'Accept');
+  assert.equal(response.headers.get('access-control-allow-credentials'), null);
 });

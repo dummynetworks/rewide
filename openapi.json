@@ -1,0 +1,328 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rewide Search API",
+    "version": "1.0.0",
+    "description": "Public, read-only open-web search API. The v1 response contract is independent of the current D1 and crawler adapters."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "The Rewide website origin"
+    }
+  ],
+  "paths": {
+    "/api/v1/search": {
+      "get": {
+        "operationId": "searchWeb",
+        "summary": "Search the indexed and discovered open web",
+        "description": "Searches the current index and submits returned URLs for asynchronous refresh when the server-side crawler integration is configured. A search does not discover arbitrary unseen URLs.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query. Terms are interpreted literally and combined with AND.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "example": "open web"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search completed, including an empty result set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                },
+                "examples": {
+                  "withResults": {
+                    "value": {
+                      "apiVersion": 1,
+                      "query": "example domain",
+                      "count": 1,
+                      "results": [
+                        {
+                          "position": 1,
+                          "resultType": "document",
+                          "indexStatus": "INDEXABLE",
+                          "url": "https://example.com/",
+                          "title": "Example Domain",
+                          "description": "",
+                          "snippet": "Example Domain …",
+                          "canonicalUrl": null,
+                          "language": "en",
+                          "fetchedAt": "2026-11-15T00:00:00.000Z",
+                          "sourceUrl": null,
+                          "discoveredAt": null
+                        }
+                      ],
+                      "crawl": {
+                        "enabled": true,
+                        "requested": 1,
+                        "fresh": 0,
+                        "queued": 1,
+                        "deduplicated": 0,
+                        "cooldown": 0,
+                        "failed": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid, too long, or too complex query.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Required search retrieval failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Search database binding is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "preflightSearch",
+        "summary": "CORS preflight for search",
+        "responses": {
+          "204": {
+            "description": "Cross-origin GET requests are allowed. No credentials are enabled."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SearchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiVersion",
+          "query",
+          "count",
+          "results",
+          "crawl"
+        ],
+        "properties": {
+          "apiVersion": {
+            "const": 1
+          },
+          "query": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "results": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          },
+          "crawl": {
+            "$ref": "#/components/schemas/CrawlSummary"
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "position",
+          "resultType",
+          "indexStatus",
+          "url",
+          "title",
+          "description",
+          "snippet",
+          "canonicalUrl",
+          "language",
+          "fetchedAt",
+          "sourceUrl",
+          "discoveredAt"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "resultType": {
+            "type": "string",
+            "enum": [
+              "document",
+              "discovered"
+            ]
+          },
+          "indexStatus": {
+            "type": "string",
+            "enum": [
+              "INDEXABLE",
+              "UNKNOWN"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "canonicalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fetchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sourceUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "discoveredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CrawlSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "requested",
+          "fresh",
+          "queued",
+          "deduplicated",
+          "cooldown",
+          "failed"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "fresh": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "queued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deduplicated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cooldown": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiVersion",
+          "error"
+        ],
+        "properties": {
+          "apiVersion": {
+            "const": 1
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "INVALID_QUERY",
+                  "QUERY_TOO_LONG",
+                  "QUERY_TOO_COMPLEX",
+                  "SEARCH_QUERY_FAILED",
+                  "SEARCH_BACKEND_UNAVAILABLE"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
