@@ -1,6 +1,6 @@
 # GDELT quadgram discovery for Rewide
 
-This tool extracts candidate article URLs from a locally downloaded GDELT Web NGrams quadgram snapshot. It is an offline importer: it does not call GDELT search APIs, use an API key, purchase credits, or download source data.
+This tool finds and downloads a recent GDELT Web NGrams quadgram file pair on demand, then extracts candidate article URLs locally. It does not call GDELT search APIs, use an API key, or purchase credits.
 
 ## Source format
 
@@ -80,7 +80,7 @@ After a successful crawl, Rewide search returns the document fetched and indexed
 - Quadgrams are phrase histograms, not complete page text. Terms not represented in a quadgram are not discoverable from that snapshot.
 - The source is a minute-level observation with a 15-minute legacy heartbeat; a snapshot is not a continuously complete news index.
 - Do not bulk-download the historical archive just to run a keyword search. Start with one recent pair and evaluate relevance.
-- GDELT's public data-file access is free, but no claim is made that the upstream host guarantees unlimited bandwidth, request rate or availability.
+- GDELT's public data-file access is free, but no claim is made that the upstream host guarantees unlimited bandwidth, request rate or availability. The downloader makes bounded, sequential timestamp checks and stops on rate-limit or server errors.
 - Original publisher content remains subject to the publisher's rights and terms. This tool retains only candidate URL metadata and match counts; Rewide independently fetches pages and must continue honoring robots.txt and noindex.
 
 ## References
