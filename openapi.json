@@ -68,7 +68,16 @@
                         "queued": 1,
                         "deduplicated": 0,
                         "cooldown": 0,
-                        "failed": 0
+                        "failed": 0,
+                        "targets": [
+                          {
+                            "url": "https://example.com/",
+                            "status": "queued",
+                            "reason": "CRAWL_QUEUED",
+                            "retryAfterAt": null,
+                            "jobId": "d5b8b33b-ef33-4b39-90aa-e4cd0848a4c4"
+                          }
+                        ]
                       }
                     }
                   }
@@ -251,7 +260,8 @@
           "queued",
           "deduplicated",
           "cooldown",
-          "failed"
+          "failed",
+          "targets"
         ],
         "properties": {
           "enabled": {
@@ -284,6 +294,13 @@
           "failed": {
             "type": "integer",
             "minimum": 0
+          },
+          "targets": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/CrawlTarget"
+            }
           }
         }
       },
@@ -320,6 +337,70 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "CrawlTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "status",
+          "reason",
+          "retryAfterAt"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "queued",
+              "deduplicated",
+              "cooldown",
+              "failed"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "retryAfterAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "httpStatus": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ttlExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "previousFailureAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "upstreamHttpStatus": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 100,
+            "maximum": 599
           }
         }
       }

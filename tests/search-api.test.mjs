@@ -148,6 +148,13 @@ test('returns discovered URLs without treating UNKNOWN as confirmed indexable', 
   assert.equal(body.crawl.enabled, true);
   assert.equal(body.crawl.requested, 1);
   assert.equal(body.crawl.queued, 1);
+  assert.deepEqual(body.crawl.targets, [{
+    url: 'https://example.com/private',
+    status: 'queued',
+    reason: 'CRAWL_QUEUED',
+    retryAfterAt: null,
+    jobId: 'job-discovered-123',
+  }]);
   assert.equal(crawlerCalled, true);
 });
 
@@ -273,6 +280,13 @@ test('submits only returned indexed URLs to rewide-machine without changing sear
     deduplicated: 0,
     cooldown: 0,
     failed: 0,
+    targets: [{
+      url: 'https://example.com/',
+      status: 'queued',
+      reason: 'CRAWL_QUEUED',
+      retryAfterAt: null,
+      jobId: 'job-123',
+    }],
   });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://rewide-machine.dummynet.workers.dev/v1/crawl');
@@ -316,6 +330,12 @@ test('reports the crawler retry cooldown without failing search', async () => {
   assert.equal(body.count, 1);
   assert.equal(body.crawl.cooldown, 1);
   assert.equal(body.crawl.failed, 0);
+  assert.deepEqual(body.crawl.targets, [{
+    url: 'https://example.com/',
+    status: 'cooldown',
+    reason: 'PREVIOUS_CRAWL_FAILURE',
+    retryAfterAt: '2026-11-16T00:00:00.000Z',
+  }]);
 });
 
 test('keeps search working when crawler credentials are not configured', async () => {
@@ -343,6 +363,7 @@ test('keeps search working when crawler credentials are not configured', async (
   assert.equal(body.crawl.enabled, false);
   assert.equal(body.crawl.reason, 'CRAWLER_NOT_CONFIGURED');
   assert.equal(body.crawl.cooldown, 0);
+  assert.deepEqual(body.crawl.targets, []);
   assert.equal(called, false);
 });
 
@@ -367,4 +388,11 @@ test('does not fail search when the crawler endpoint rejects or is unavailable',
   assert.equal(response.status, 200);
   assert.equal(body.count, 1);
   assert.equal(body.crawl.failed, 1);
+  assert.deepEqual(body.crawl.targets, [{
+    url: 'https://example.com/',
+    status: 'failed',
+    reason: 'UNAUTHORIZED',
+    retryAfterAt: null,
+    httpStatus: 401,
+  }]);
 });

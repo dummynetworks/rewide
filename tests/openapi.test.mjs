@@ -29,7 +29,11 @@ test('OpenAPI success schema matches the public v1 response envelope', () => {
   );
   assert.deepEqual(
     specification.components.schemas.CrawlSummary.required,
-    ['enabled', 'requested', 'fresh', 'queued', 'deduplicated', 'cooldown', 'failed'],
+    ['enabled', 'requested', 'fresh', 'queued', 'deduplicated', 'cooldown', 'failed', 'targets'],
+  );
+  assert.deepEqual(
+    specification.components.schemas.CrawlTarget.required,
+    ['url', 'status', 'reason', 'retryAfterAt'],
   );
 });
 

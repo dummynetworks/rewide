@@ -1,14 +1,20 @@
 import { rankSearchResults } from './ranking.js';
 
-function crawlerFailureSummary(requested) {
+function crawlerFailureSummary(urls) {
   return {
     enabled: true,
-    requested,
+    requested: urls.length,
     fresh: 0,
     queued: 0,
     deduplicated: 0,
     cooldown: 0,
-    failed: requested,
+    failed: urls.length,
+    targets: urls.map((url) => ({
+      url,
+      status: 'failed',
+      reason: 'CRAWLER_REQUEST_FAILED',
+      retryAfterAt: null,
+    })),
   };
 }
 
@@ -69,7 +75,7 @@ export function createSearchService({ repository, crawler, logger = console } = 
           });
         } catch (error) {
           logger.warn('[rewide] Crawler request failed; search results are unaffected.', error);
-          crawl = crawlerFailureSummary(crawlTargets.length);
+          crawl = crawlerFailureSummary(crawlTargets);
         }
       } else {
         crawl = {
@@ -81,6 +87,7 @@ export function createSearchService({ repository, crawler, logger = console } = 
           deduplicated: 0,
           cooldown: 0,
           failed: 0,
+          targets: [],
         };
       }
 

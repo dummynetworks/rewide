@@ -12,6 +12,7 @@ function emptySummary(reason) {
     deduplicated: 0,
     cooldown: 0,
     failed: 0,
+    targets: [],
   };
 }
 
@@ -64,20 +65,86 @@ function normalizeTargets(values) {
   return targets;
 }
 
-async function classifyResponse(response) {
-  if (response.status === 200) {
-    const payload = await response.json().catch(() => null);
-    if (payload?.status === 'fresh') return 'fresh';
-    if (payload?.status === 'cooldown') return 'cooldown';
-    return 'failed';
+function targetOutcome(url, status, reason, details = {}) {
+  const outcome = {
+    url,
+    status,
+    reason,
+    retryAfterAt: details.retryAfterAt ?? null,
+  };
+
+  for (const field of [
+    'jobId',
+    'httpStatus',
+    'fetchedAt',
+    'ttlExpiresAt',
+    'previousFailureAt',
+    'upstreamHttpStatus',
+  ]) {
+    if (details[field] !== undefined) outcome[field] = details[field];
   }
 
-  if (response.status === 202) {
-    const payload = await response.json().catch(() => null);
-    return payload?.deduplicated === true ? 'deduplicated' : 'queued';
+  return outcome;
+}
+
+async function classifyResponse(response, url) {
+  const payload = await response.json().catch(() => null);
+  const hasPayload = payload !== null && typeof payload === 'object' && !Array.isArray(payload);
+
+  if (response.status === 200 && hasPayload) {
+    if (payload.status === 'fresh') {
+      return targetOutcome(url, 'fresh', 'WITHIN_WATCH_TTL', {
+        fetchedAt: payload.fetchedAt,
+        ttlExpiresAt: payload.ttlExpiresAt,
+      });
+    }
+
+    if (payload.status === 'cooldown') {
+      return targetOutcome(
+        url,
+        'cooldown',
+        typeof payload.errorCode === 'string'
+          ? payload.errorCode
+          : 'PREVIOUS_CRAWL_FAILURE',
+        {
+          retryAfterAt: payload.retryAt,
+          previousFailureAt: payload.previousFailureAt,
+          upstreamHttpStatus: payload.upstreamHttpStatus,
+        },
+      );
+    }
+
+    return targetOutcome(url, 'failed', 'UNEXPECTED_CRAWLER_RESPONSE', {
+      httpStatus: response.status,
+    });
   }
 
-  return 'failed';
+  if (
+    response.status === 202
+    && hasPayload
+    && typeof payload.jobId === 'string'
+    && ['queued', 'running'].includes(payload.status)
+  ) {
+    if (payload.deduplicated === true) {
+      return targetOutcome(url, 'deduplicated', 'ACTIVE_CRAWL_EXISTS', {
+        jobId: payload.jobId,
+      });
+    }
+
+    return targetOutcome(url, 'queued', 'CRAWL_QUEUED', {
+      jobId: payload.jobId,
+    });
+  }
+
+  const reason = hasPayload && typeof payload.error === 'string'
+    ? payload.error
+    : (response.status === 200 || response.status === 202
+      ? 'UNEXPECTED_CRAWLER_RESPONSE'
+      : 'HTTP_' + response.status);
+
+  return targetOutcome(url, 'failed', reason, {
+    httpStatus: response.status,
+  });
 }
 
 /**
@@ -118,6 +185,7 @@ export function createRewideMachineClient({
         deduplicated: 0,
         cooldown: 0,
         failed: 0,
+        targets: [],
       };
 
       const outcomes = await Promise.all(targets.map(async (target) => {
@@ -140,14 +208,15 @@ export function createRewideMachineClient({
               : undefined,
           });
 
-          return await classifyResponse(response);
+          return await classifyResponse(response, target);
         } catch {
-          return 'failed';
+          return targetOutcome(target, 'failed', 'CRAWLER_REQUEST_FAILED');
         }
       }));
 
       for (const outcome of outcomes) {
-        summary[outcome] += 1;
+        summary[outcome.status] += 1;
+        summary.targets.push(outcome);
       }
 
       return summary;

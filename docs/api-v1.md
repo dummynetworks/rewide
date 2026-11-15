@@ -85,7 +85,16 @@ HTTP `200`:
     "queued": 1,
     "deduplicated": 0,
     "cooldown": 0,
-    "failed": 0
+    "failed": 0,
+    "targets": [
+      {
+        "url": "https://example.com/",
+        "status": "queued",
+        "reason": "CRAWL_QUEUED",
+        "retryAfterAt": null,
+        "jobId": "d5b8b33b-ef33-4b39-90aa-e4cd0848a4c4"
+      }
+    ]
   }
 }
 ```
@@ -116,6 +125,20 @@ Crawl submission is a best-effort side effect. A crawler outage does not turn a 
 | `deduplicated` | URLs already covered by an active job |
 | `cooldown` | Failed URLs waiting for their retry time |
 | `failed` | Submissions that could not be accepted or completed |
+| `targets` | Per-URL decisions, in submission order; empty when crawler integration is disabled |
+
+Each `targets` entry contains `url`, `status`, `reason`, and `retryAfterAt`. The status is one of `fresh`, `queued`, `deduplicated`, `cooldown`, or `failed`. `retryAfterAt` is an ISO 8601 timestamp when a retry is deferred, otherwise `null`.
+
+Additional fields are included when the Worker provides them:
+
+| Field | Meaning |
+| --- | --- |
+| `jobId` | Created or already-active crawl job identifier |
+| `fetchedAt`, `ttlExpiresAt` | Fetch timestamp and success-TTL expiry for a fresh URL |
+| `previousFailureAt`, `upstreamHttpStatus` | Previous failure metadata for a URL in cooldown |
+| `httpStatus` | HTTP status returned by the crawler Worker for a failed request |
+
+The `reason` is a stable machine-readable classification. For a cooldown it uses the previous crawl's error code when available, such as `ROBOTS_DISALLOWED`; otherwise it uses `PREVIOUS_CRAWL_FAILURE`. Queue outcomes use `CRAWL_QUEUED` or `ACTIVE_CRAWL_EXISTS`. Failed Worker responses use the Worker error code or an `HTTP_<status>` fallback. A malformed successful response is reported as `UNEXPECTED_CRAWLER_RESPONSE`, and a transport exception as `CRAWLER_REQUEST_FAILED`.
 
 ## Error response
 

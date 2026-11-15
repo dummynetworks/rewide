@@ -33,7 +33,7 @@ The World Bank Indicators API is public and does not require an API key. The end
 - `GET /api/v1/search?q=<query>` is the canonical, versioned search API. Both paths use the same v1 handler and response contract.
 - Search retrieves up to 10 documents from the shared D1 FTS5 index and supplements them with matching discovered URLs.
 - The server-side search service submits only URLs included in the final result set to `rewide-machine`. The crawler's D1-backed 24-hour `watchTTL` reuses fresh documents and queues stale or unseen URLs.
-- Search results are returned from the current index while crawl jobs run asynchronously. Newly fetched documents become searchable on later queries.
+- Search results are returned from the current index while crawl jobs run asynchronously. The API includes per-URL crawl outcomes and retry/TTL metadata; newly fetched documents become searchable on later queries.
 - Recently failed URLs have a separate error-aware retry cooldown, so a robots denial or persistent fetch failure is not retried on every search.
 - Search can only find URLs already present in the document or discovery index. A new installation still needs an initial seed import; the Tranco importer in `rewide-machine` is a manual, bounded option and runs as a dry-run unless `--submit` is specified.
 - Search results are rendered in the existing home-page interface.

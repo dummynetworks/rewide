@@ -102,6 +102,20 @@ test('search service isolates discovery and crawler failures from document retri
   }]);
   assert.equal(result.crawl.failed, 2);
   assert.equal(result.crawl.cooldown, 0);
+  assert.deepEqual(result.crawl.targets, [
+    {
+      url: 'https://example.com/',
+      status: 'failed',
+      reason: 'CRAWLER_REQUEST_FAILED',
+      retryAfterAt: null,
+    },
+    {
+      url: 'https://other.example/',
+      status: 'failed',
+      reason: 'CRAWLER_REQUEST_FAILED',
+      retryAfterAt: null,
+    },
+  ]);
   assert.equal(warnings.length, 2);
 });
 
@@ -127,6 +141,12 @@ test('search service only refreshes URLs that survive the final result limit', a
           deduplicated: 0,
           cooldown: 0,
           failed: 0,
+          targets: urls.map((url) => ({
+            url,
+            status: 'queued',
+            reason: 'CRAWL_QUEUED',
+            retryAfterAt: null,
+          })),
         };
       },
     },
@@ -147,10 +167,27 @@ test('search service only refreshes URLs that survive the final result limit', a
 test('Rewide Machine client reports every outcome using a stable summary contract', async () => {
   const requests = [];
   const outcomes = [
-    new Response(JSON.stringify({ status: 'fresh' }), { status: 200 }),
-    new Response(JSON.stringify({ status: 'cooldown' }), { status: 200 }),
-    new Response(JSON.stringify({ status: 'queued' }), { status: 202 }),
-    new Response(JSON.stringify({ deduplicated: true }), { status: 202 }),
+    new Response(JSON.stringify({
+      status: 'fresh',
+      fetchedAt: '2026-11-15T00:00:00.000Z',
+      ttlExpiresAt: '2026-11-16T00:00:00.000Z',
+    }), { status: 200 }),
+    new Response(JSON.stringify({
+      status: 'cooldown',
+      retryAt: '2026-11-17T00:00:00.000Z',
+      previousFailureAt: '2026-11-16T00:00:00.000Z',
+      errorCode: 'ROBOTS_DISALLOWED',
+      upstreamHttpStatus: null,
+    }), { status: 200 }),
+    new Response(JSON.stringify({
+      jobId: 'job-queued',
+      status: 'queued',
+    }), { status: 202 }),
+    new Response(JSON.stringify({
+      jobId: 'job-running',
+      status: 'running',
+      deduplicated: true,
+    }), { status: 202 }),
     new Response('upstream error', { status: 502 }),
   ];
   const client = createRewideMachineClient({
@@ -178,6 +215,45 @@ test('Rewide Machine client reports every outcome using a stable summary contrac
     deduplicated: 1,
     cooldown: 1,
     failed: 1,
+    targets: [
+      {
+        url: 'https://fresh.example/',
+        status: 'fresh',
+        reason: 'WITHIN_WATCH_TTL',
+        retryAfterAt: null,
+        fetchedAt: '2026-11-15T00:00:00.000Z',
+        ttlExpiresAt: '2026-11-16T00:00:00.000Z',
+      },
+      {
+        url: 'https://cooldown.example/',
+        status: 'cooldown',
+        reason: 'ROBOTS_DISALLOWED',
+        retryAfterAt: '2026-11-17T00:00:00.000Z',
+        previousFailureAt: '2026-11-16T00:00:00.000Z',
+        upstreamHttpStatus: null,
+      },
+      {
+        url: 'https://queued.example/',
+        status: 'queued',
+        reason: 'CRAWL_QUEUED',
+        retryAfterAt: null,
+        jobId: 'job-queued',
+      },
+      {
+        url: 'https://duplicate.example/',
+        status: 'deduplicated',
+        reason: 'ACTIVE_CRAWL_EXISTS',
+        retryAfterAt: null,
+        jobId: 'job-running',
+      },
+      {
+        url: 'https://failed.example/',
+        status: 'failed',
+        reason: 'HTTP_502',
+        retryAfterAt: null,
+        httpStatus: 502,
+      },
+    ],
   });
   assert.equal(requests.length, 5);
   assert.equal(requests[0].url, 'https://rewide-machine.dummynet.workers.dev/v1/crawl');
@@ -202,6 +278,7 @@ test('Rewide Machine client always returns the same counters when disabled', asy
     deduplicated: 0,
     cooldown: 0,
     failed: 0,
+    targets: [],
   });
 });
 
