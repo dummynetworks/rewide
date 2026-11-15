@@ -6,7 +6,7 @@ const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
 const MAX_QUERY_TOKENS = 4;
 const DEFAULT_WORKER_ENDPOINT = 'https://rewide-machine.dummynet.workers.dev';
-const SUSPICIOUS_HTML_ATTRIBUTE = /(?:%20|%09|%0a|%0d|%0b|%0c|\\+)(?:class|href|src|style|id|onclick|onerror)\\s*(?:=|%3d)/i;
+const SUSPICIOUS_HTML_ATTRIBUTE = /(?:%20|%09|%0a|%0d|%0b|%0c|\+)(?:class|href|src|style|id|onclick|onerror)\s*(?:=|%3d)/i;
 
 async function* readLines(filePath) {
   const source = createReadStream(filePath);
@@ -27,7 +27,7 @@ export function normalizeTokens(value) {
   return value
     .normalize('NFKC')
     .toLowerCase()
-    .match(/[\\p{L}\\p{N}]+/gu) ?? [];
+    .match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 function matchesPhrase(quadgram, queryTokens) {
@@ -59,7 +59,7 @@ function normalizeCandidateUrl(value) {
   if (value.length > 2048) {
     return { url: null, reason: 'url_too_long' };
   }
-  if (/[\\u0000-\\u0020\\u007f]/u.test(value)) {
+  if (/[\u0000-\u0020\u007f]/u.test(value)) {
     return { url: null, reason: 'url_contains_whitespace_or_control' };
   }
   if (SUSPICIOUS_HTML_ATTRIBUTE.test(value)) {
@@ -86,7 +86,7 @@ function normalizeCandidateUrl(value) {
 }
 
 function getSourceTimestamp(filePath) {
-  const match = String(filePath).match(/(\\d{14})/);
+  const match = String(filePath).match(/(\d{14})/);
   if (!match) return null;
 
   const value = match[1];
@@ -147,7 +147,7 @@ export async function scanGdeltSnapshot({
     if (!line.trim()) continue;
     ngramRows += 1;
 
-    const columns = line.split('\\t');
+    const columns = line.split('\t');
     if (columns.length < 3) {
       malformedNgramRows += 1;
       continue;
