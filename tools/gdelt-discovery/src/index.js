@@ -6,6 +6,7 @@ const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
 const MAX_QUERY_TOKENS = 4;
 const DEFAULT_WORKER_ENDPOINT = 'https://rewide-machine.dummynet.workers.dev';
+const SUSPICIOUS_HTML_ATTRIBUTE = /(?:%20|%09|%0a|%0d|%0b|%0c|\\+)(?:class|href|src|style|id|onclick|onerror)\\s*(?:=|%3d)/i;
 
 async function* readLines(filePath) {
   const source = createReadStream(filePath);
@@ -26,7 +27,7 @@ export function normalizeTokens(value) {
   return value
     .normalize('NFKC')
     .toLowerCase()
-    .match(/[\p{L}\p{N}]+/gu) ?? [];
+    .match(/[\\p{L}\\p{N}]+/gu) ?? [];
 }
 
 function matchesPhrase(quadgram, queryTokens) {
@@ -47,29 +48,45 @@ function matchesPhrase(quadgram, queryTokens) {
   return false;
 }
 
+/**
+ * Validate and normalize a candidate URL without attempting to repair it.
+ * A rejected URL is returned with a stable diagnostic reason.
+ */
 function normalizeCandidateUrl(value) {
-  if (typeof value !== 'string' || value.length > 2048) return null;
+  if (typeof value !== 'string' || value.length === 0) {
+    return { url: null, reason: 'url_not_string' };
+  }
+  if (value.length > 2048) {
+    return { url: null, reason: 'url_too_long' };
+  }
+  if (/[\\u0000-\\u0020\\u007f]/u.test(value)) {
+    return { url: null, reason: 'url_contains_whitespace_or_control' };
+  }
+  if (SUSPICIOUS_HTML_ATTRIBUTE.test(value)) {
+    return { url: null, reason: 'embedded_html_attribute' };
+  }
 
   try {
     const url = new URL(value);
-    if (
-      !['http:', 'https:'].includes(url.protocol)
-      || url.username
-      || url.password
-      || !url.hostname
-    ) {
-      return null;
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return { url: null, reason: 'unsupported_protocol' };
+    }
+    if (url.username || url.password) {
+      return { url: null, reason: 'url_credentials_not_allowed' };
+    }
+    if (!url.hostname) {
+      return { url: null, reason: 'url_missing_hostname' };
     }
 
     url.hash = '';
-    return url.href;
+    return { url: url.href, reason: null };
   } catch {
-    return null;
+    return { url: null, reason: 'malformed_url' };
   }
 }
 
 function getSourceTimestamp(filePath) {
-  const match = String(filePath).match(/(\d{14})/);
+  const match = String(filePath).match(/(\\d{14})/);
   if (!match) return null;
 
   const value = match[1];
@@ -130,7 +147,7 @@ export async function scanGdeltSnapshot({
     if (!line.trim()) continue;
     ngramRows += 1;
 
-    const columns = line.split('\t');
+    const columns = line.split('\\t');
     if (columns.length < 3) {
       malformedNgramRows += 1;
       continue;
@@ -159,6 +176,8 @@ export async function scanGdeltSnapshot({
   }
 
   const candidatesByUrl = new Map();
+  const rejectedUrls = [];
+  const rejectedUrlReasons = {};
   const remainingIds = new Set(matches.keys());
   let tocRows = 0;
   let malformedTocRows = 0;
@@ -188,12 +207,23 @@ export async function scanGdeltSnapshot({
       continue;
     }
 
-    const url = normalizeCandidateUrl(record.url);
-    if (!url) {
+    const normalizedUrl = normalizeCandidateUrl(record.url);
+    if (!normalizedUrl.url) {
       invalidUrls += 1;
+      rejectedUrlReasons[normalizedUrl.reason] = (rejectedUrlReasons[normalizedUrl.reason] ?? 0) + 1;
+      const originalUrl = typeof record.url === 'string' ? record.url : null;
+      rejectedUrls.push({
+        docId,
+        title: typeof record.title === 'string' ? record.title.trim().slice(0, 500) : '',
+        originalUrl: originalUrl === null ? null : originalUrl.slice(0, 4096),
+        originalUrlTruncated: originalUrl !== null && originalUrl.length > 4096,
+        reason: normalizedUrl.reason,
+        gdeltRecordDate: typeof record.date === 'string' ? record.date : null,
+      });
       continue;
     }
 
+    const url = normalizedUrl.url;
     const match = matches.get(docId);
     const candidate = candidatesByUrl.get(url);
     if (candidate) {
@@ -204,13 +234,13 @@ export async function scanGdeltSnapshot({
       }
     } else {
       candidatesByUrl.set(url, {
-        schemaVersion: 1,
+        schemaVersion: 2,
         source: 'gdelt-web-ngrams-quadgrams',
         sourceTimestamp: getSourceTimestamp(ngramsPath),
+        gdeltRecordDate: typeof record.date === 'string' ? record.date : null,
         url,
         title: typeof record.title === 'string' ? record.title.trim().slice(0, 500) : '',
         language: typeof record.lang === 'string' ? record.lang : null,
-        sourceDate: typeof record.date === 'string' ? record.date : null,
         occurrences: match.occurrences,
         matchedQuadgrams: match.matchedQuadgrams,
       });
@@ -229,6 +259,7 @@ export async function scanGdeltSnapshot({
     query: String(query).trim(),
     language: requestedLanguage,
     candidates,
+    rejectedUrls,
     stats: {
       ngramRows,
       malformedNgramRows,
@@ -237,6 +268,8 @@ export async function scanGdeltSnapshot({
       tocRows,
       malformedTocRows,
       invalidUrls,
+      rejectedUrlRecords: rejectedUrls.length,
+      rejectedUrlReasons,
       missingTocEntries: remainingIds.size,
       uniqueCandidates: candidatesByUrl.size,
       returnedCandidates: candidates.length,
@@ -286,7 +319,7 @@ export async function submitCandidates(candidates, {
   const submissionLimit = positiveInteger(limit, 100, 1000, 'submit limit');
   const urls = [...new Set(
     (Array.isArray(candidates) ? candidates : [])
-      .map((candidate) => normalizeCandidateUrl(candidate?.url))
+      .map((candidate) => normalizeCandidateUrl(candidate?.url).url)
       .filter(Boolean),
   )].slice(0, submissionLimit);
 
