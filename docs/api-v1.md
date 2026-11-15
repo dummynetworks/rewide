@@ -6,19 +6,19 @@ This document defines the public search API contract. The contract is intentiona
 - Authentication: none for search requests
 - Transport: HTTPS
 - Response format: JSON
-- CORS: public read-only access with \`Access-Control-Allow-Origin: *\`; credentials are not supported
+- CORS: public read-only access with `Access-Control-Allow-Origin: *`; credentials are not supported
 
 ## Endpoint
 
-\`GET /api/v1/search?q=<query>\`
+`GET /api/v1/search?q=<query>`
 
-The legacy \`GET /api/search?q=<query>\` endpoint is a compatibility alias to the same handler. Existing website clients can keep using the legacy path.
+The legacy `GET /api/search?q=<query>` endpoint is a compatibility alias to the same handler. Existing website clients can keep using the legacy path.
 
 ## Request
 
 | Field | Type | Required | Constraint |
 | --- | --- | --- | --- |
-| \`q\` | string | Yes | Trimmed, 1–256 characters, 1–12 searchable letter/number terms |
+| `q` | string | Yes | Trimmed, 1–256 characters, 1–12 searchable letter/number terms |
 
 Search terms are interpreted literally and combined with AND. FTS5 syntax supplied by a client is not executed as an operator.
 
@@ -26,15 +26,15 @@ Search terms are interpreted literally and combined with AND. FTS5 syntax suppli
 
 ### curl
 
-\`\`\`sh
-curl --get 'https://rewide.devs.surf/api/v1/search' \\
-  --header 'Accept: application/json' \\
+```sh
+curl --get 'https://rewide.devs.surf/api/v1/search' \
+  --header 'Accept: application/json' \
   --data-urlencode 'q=open web'
-\`\`\`
+```
 
 ### JavaScript
 
-\`\`\`js
+```js
 const endpoint = new URL('https://rewide.devs.surf/api/v1/search');
 endpoint.searchParams.set('q', 'open web');
 
@@ -49,15 +49,15 @@ if (!response.ok) {
 }
 
 console.log(payload.results);
-\`\`\`
+```
 
 The endpoint is read-only from the client's perspective. Search refreshes eligible result URLs asynchronously on the server; clients do not receive or need the crawler token.
 
 ## Successful response
 
-HTTP \`200\`:
+HTTP `200`:
 
-\`\`\`json
+```json
 {
   "apiVersion": 1,
   "query": "example domain",
@@ -88,19 +88,19 @@ HTTP \`200\`:
     "failed": 0
   }
 }
-\`\`\`
+```
 
 ### Result fields
 
 | Field | Meaning |
 | --- | --- |
-| \`position\` | One-based position in the merged result list |
-| \`resultType\` | \`document\` for fetched documents; \`discovered\` for known URLs not yet indexed |
-| \`indexStatus\` | \`INDEXABLE\` when confirmed indexable; \`UNKNOWN\` when the URL has not yet been fetched and classified |
-| \`url\` | URL clients should open |
-| \`title\`, \`description\`, \`snippet\` | Display metadata; empty values are allowed where data is not known |
-| \`canonicalUrl\`, \`language\`, \`fetchedAt\` | Fetched-document metadata; null for discovery-only results |
-| \`sourceUrl\`, \`discoveredAt\` | Discovery metadata; null for fetched-document results |
+| `position` | One-based position in the merged result list |
+| `resultType` | `document` for fetched documents; `discovered` for known URLs not yet indexed |
+| `indexStatus` | `INDEXABLE` when confirmed indexable; `UNKNOWN` when the URL has not yet been fetched and classified |
+| `url` | URL clients should open |
+| `title`, `description`, `snippet` | Display metadata; empty values are allowed where data is not known |
+| `canonicalUrl`, `language`, `fetchedAt` | Fetched-document metadata; null for discovery-only results |
+| `sourceUrl`, `discoveredAt` | Discovery metadata; null for fetched-document results |
 
 ### Crawl summary fields
 
@@ -108,20 +108,20 @@ Crawl submission is a best-effort side effect. A crawler outage does not turn a 
 
 | Field | Meaning |
 | --- | --- |
-| \`enabled\` | Whether the crawler integration is configured |
-| \`reason\` | Optional reason when integration is disabled |
-| \`requested\` | Unique result URLs submitted, capped at 10 |
-| \`fresh\` | URLs already fresh under the crawler's success TTL |
-| \`queued\` | New crawl jobs queued |
-| \`deduplicated\` | URLs already covered by an active job |
-| \`cooldown\` | Failed URLs waiting for their retry time |
-| \`failed\` | Submissions that could not be accepted or completed |
+| `enabled` | Whether the crawler integration is configured |
+| `reason` | Optional reason when integration is disabled |
+| `requested` | Unique result URLs submitted, capped at 10 |
+| `fresh` | URLs already fresh under the crawler's success TTL |
+| `queued` | New crawl jobs queued |
+| `deduplicated` | URLs already covered by an active job |
+| `cooldown` | Failed URLs waiting for their retry time |
+| `failed` | Submissions that could not be accepted or completed |
 
 ## Error response
 
 All errors use the same envelope:
 
-\`\`\`json
+```json
 {
   "apiVersion": 1,
   "error": {
@@ -129,24 +129,24 @@ All errors use the same envelope:
     "message": "A non-empty q parameter is required."
   }
 }
-\`\`\`
+```
 
 | HTTP | Code | Meaning |
 | --- | --- | --- |
-| \`400\` | \`INVALID_QUERY\` | Missing query or no searchable tokens |
-| \`400\` | \`QUERY_TOO_LONG\` | More than 256 characters |
-| \`400\` | \`QUERY_TOO_COMPLEX\` | More than 12 searchable terms |
-| \`500\` | \`SEARCH_QUERY_FAILED\` | Required document retrieval failed |
-| \`503\` | \`SEARCH_BACKEND_UNAVAILABLE\` | Pages D1 binding is missing |
+| `400` | `INVALID_QUERY` | Missing query or no searchable tokens |
+| `400` | `QUERY_TOO_LONG` | More than 256 characters |
+| `400` | `QUERY_TOO_COMPLEX` | More than 12 searchable terms |
+| `500` | `SEARCH_QUERY_FAILED` | Required document retrieval failed |
+| `503` | `SEARCH_BACKEND_UNAVAILABLE` | Pages D1 binding is missing |
 
 ## CORS
 
 The search endpoint is public and read-only. It allows cross-origin browser requests:
 
-- \`Access-Control-Allow-Origin: *\`
-- \`Access-Control-Allow-Methods: GET, OPTIONS\`
-- \`Access-Control-Allow-Headers: Accept\`
-- \`Access-Control-Max-Age: 86400\`
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, OPTIONS`
+- `Access-Control-Allow-Headers: Accept`
+- `Access-Control-Max-Age: 86400`
 
 No cookies, browser credentials, or authorization headers are required or accepted as part of the search contract. The crawler secret remains server-side.
 
@@ -165,8 +165,8 @@ The website and external clients depend on this API contract, not on D1 tables o
 
 | Binding | Type | Required |
 | --- | --- | --- |
-| \`REWIDE_DB\` | Cloudflare D1 | Yes |
-| \`REWIDE_CRAWLER_URL\` | HTTPS URL variable | No |
-| \`REWIDE_CRAWLER_TOKEN\` | Secret matching \`rewide-machine\`'s \`DUMMYNET_TOKEN\` | No |
+| `REWIDE_DB` | Cloudflare D1 | Yes |
+| `REWIDE_CRAWLER_URL` | HTTPS URL variable | No |
+| `REWIDE_CRAWLER_TOKEN` | Secret matching `rewide-machine`'s `DUMMYNET_TOKEN` | No |
 
 Without crawler credentials, retrieval still works and the response reports a disabled crawler integration. The endpoint never exposes the crawler token to browser code.
