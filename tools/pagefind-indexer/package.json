@@ -1,0 +1,16 @@
+{
+  "name": "rewide-pagefind-indexer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Offline Pagefind snapshot index builder for Rewide document exports",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "node src/build-index.mjs"
+  },
+  "dependencies": {
+    "pagefind": "1.6.0"
+  }
+}
