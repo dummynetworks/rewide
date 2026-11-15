@@ -279,6 +279,39 @@ test('submits indexed result URLs to rewide-machine without changing search resu
   });
 });
 
+test('reports the crawler retry cooldown without failing search', async () => {
+  const database = createDatabase([{
+    url: 'https://example.com/',
+    title: 'Example Domain',
+    description: '',
+    snippet: 'Example snippet',
+    canonicalUrl: null,
+    language: 'en',
+    fetchedAt: '2026-11-13T00:00:00.000Z',
+    relevance: -1,
+  }]);
+  const fetcher = async () => new Response(JSON.stringify({
+    url: 'https://example.com/',
+    status: 'cooldown',
+    cached: true,
+    crawlRequired: false,
+    retryAt: '2026-11-16T00:00:00.000Z',
+  }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+
+  const response = await GET(makeEvent('example', database, fetcher, {
+    REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.count, 1);
+  assert.equal(body.crawl.cooldown, 1);
+  assert.equal(body.crawl.failed, 0);
+});
+
 test('keeps search working when crawler credentials are not configured', async () => {
   const database = createDatabase([{
     url: 'https://example.com/',
