@@ -36,7 +36,9 @@ function createDatabase(rows = [], discoveredRows = []) {
 test('rejects an empty query', async () => {
   const response = await GET(makeEvent('  ', createDatabase()));
   assert.equal(response.status, 400);
-  assert.equal((await response.json()).error.code, 'INVALID_QUERY');
+  const body = await response.json();
+  assert.equal(body.apiVersion, 1);
+  assert.equal(body.error.code, 'INVALID_QUERY');
 });
 
 test('rejects queries longer than 256 characters', async () => {
@@ -64,7 +66,9 @@ test('returns an explicit unavailable response without the Pages D1 binding', as
   const response = await GET(makeEvent('open web'));
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('cache-control'), 'no-store');
-  assert.equal((await response.json()).error.code, 'SEARCH_BACKEND_UNAVAILABLE');
+  const body = await response.json();
+  assert.equal(body.apiVersion, 1);
+  assert.equal(body.error.code, 'SEARCH_BACKEND_UNAVAILABLE');
 });
 
 test('queries indexed documents with safely quoted AND terms', async () => {
@@ -83,6 +87,7 @@ test('queries indexed documents with safely quoted AND terms', async () => {
   const body = await response.json();
 
   assert.equal(response.status, 200);
+  assert.equal(body.apiVersion, 1);
   assert.equal(body.query, 'example domain');
   assert.equal(body.count, 1);
   assert.equal(body.results[0].position, 1);
@@ -231,7 +236,7 @@ test('does not expose database error details', async () => {
   assert.equal((await response.json()).error.code, 'SEARCH_QUERY_FAILED');
 });
 
-test('submits indexed result URLs to rewide-machine without changing search results', async () => {
+test('submits only returned indexed URLs to rewide-machine without changing search results', async () => {
   const database = createDatabase([{
     url: 'https://example.com/',
     title: 'Example Domain',
@@ -266,6 +271,7 @@ test('submits indexed result URLs to rewide-machine without changing search resu
     fresh: 0,
     queued: 1,
     deduplicated: 0,
+    cooldown: 0,
     failed: 0,
   });
   assert.equal(calls.length, 1);
@@ -336,6 +342,7 @@ test('keeps search working when crawler credentials are not configured', async (
   assert.equal(body.count, 1);
   assert.equal(body.crawl.enabled, false);
   assert.equal(body.crawl.reason, 'CRAWLER_NOT_CONFIGURED');
+  assert.equal(body.crawl.cooldown, 0);
   assert.equal(called, false);
 });
 
