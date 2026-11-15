@@ -13,69 +13,35 @@ The DOCID is local to its matching file pair. Never join one NGRAMS file to anot
 
 GDELT's documentation says the quadgram files contain frequency histograms, not article full text. This adapter uses the quadgrams only to select matching document IDs, then extracts URL metadata from the paired TOC. Rewide Machine fetches the original article itself.
 
-## Download one snapshot
+## Download the latest snapshot automatically
 
-GDELT recommends requesting a timestamp several minutes in the past. Its legacy processing has a 15-minute heartbeat and publishes short bursts of minute-stamped files. The following PowerShell 7 example selects a conservative timestamp from the latest expected publishing window, then downloads both files using the **same** timestamp:
-
-~~~powershell
-$ErrorActionPreference = "Stop"
-
-$base = "https://data.gdeltproject.org/gdeltv5/weblegacy/ngrams"
-$now = [DateTimeOffset]::UtcNow.AddMinutes(-5)
-$minuteInCycle = $now.Minute % 15
-
-# Expected publication bursts cover minutes 00-04, 15-19, 30-34, and 45-49.
-# If the five-minute look-back lands outside a burst, use the previous burst's last minute.
-if ($minuteInCycle -gt 4) {
-    $now = $now.AddMinutes(-($minuteInCycle - 4))
-}
-
-$stamp = $now.ToString("yyyyMMddHHmm") + "00"
-$directory = Join-Path (Get-Location) "data/gdelt"
-New-Item -ItemType Directory -Force -Path $directory | Out-Null
-
-$ngrams = Join-Path $directory "$stamp.ngrams.txt.gz"
-$toc = Join-Path $directory "$stamp.toc.json.gz"
-
-curl.exe -fL --silent --show-error "$base/$stamp.ngrams.txt.gz" -o $ngrams
-if ($LASTEXITCODE -ne 0) {
-    throw "GDELT NGRAMS download failed for $stamp."
-}
-
-curl.exe -fL --silent --show-error "$base/$stamp.toc.json.gz" -o $toc
-if ($LASTEXITCODE -ne 0) {
-    Remove-Item $ngrams -Force -ErrorAction SilentlyContinue
-    throw "GDELT TOC download failed for $stamp. Retry later; do not mix timestamps."
-}
-
-Write-Host "Downloaded matching GDELT snapshot: $stamp"
-Write-Host "NGRAMS: $ngrams"
-Write-Host "TOC:    $toc"
-~~~
-
-If the source has not published that pair yet, rerun the block a little later. Do not combine an NGRAMS file with a TOC file carrying a different timestamp. You do **not** need to unzip the files: the scanner reads both gzip files directly.
-
-The source URLs are direct public data-file URLs, not API endpoints. The upstream server may still impose operational controls or become unavailable; this project does not claim unlimited bandwidth or service availability.
-
-## Scan locally
-
-From the Rewide repository root:
+You do not need to look up timestamps or download two files by hand. From the Rewide repository root, run:
 
 ~~~powershell
-$scanArgs = @(
-  "--ngrams", ".\20261115180000.ngrams.txt.gz",
-  "--toc", ".\20261115180000.toc.json.gz",
-  "--query", "climate change",
-  "--language", "en",
-  "--limit", "100",
-  "--output", ".\data\gdelt-candidates.ndjson"
-)
-node tools/gdelt-discovery/src/cli.js @scanArgs
+npm run discover:gdelt -- --latest --query "climate change" --language en --limit 100 --output .\data\gdelt\candidates.ndjson
 ~~~
 
-Supported query length is one to four searchable words because the source contains quadgrams. Matching is case-insensitive, Unicode-normalized, punctuation-insensitive and phrase-aware. Candidate URLs are normalized, fragment-free, de-duplicated and ranked by matched occurrence count.
+The CLI:
 
-The tool outputs JSON Lines with source timestamp, URL, source title/date/language and match counts. It does not treat GDELT titles or snippets as fetched Rewide search results.
+1. Starts with the timestamp GDELT recommends checking (UTC, five minutes ago).
+2. Tries recent minute-stamped files from newest to oldest because GDELT publishes in short bursts around its 15-minute processing heartbeat.
+3. Downloads the NGRAMS file and its TOC using the exact same timestamp.
+4. Skips a timestamp when either file is not available (HTTP 404), and stops instead of hammering the host if it receives a rate-limit or server error.
+5. Saves the matching pair under `data/gdelt/`, then scans it for the query.
+
+By default it searches back 30 minutes. Increase the window with `--lookback-minutes 60` (maximum 180). If no complete pair is available, rerun later. Do not mix timestamps.
+
+This downloads public data files, not an API response. The upstream host may still impose operational limits or become unavailable; this project does not claim unlimited bandwidth or availability. The scanner reads gzip files directly, so no unzip step is required.
+
+## Scan an already-downloaded pair manually
+
+The `--latest` mode above is the recommended path. You can also pass an existing pair directly:
+
+~~~powershell
+npm run discover:gdelt -- --ngrams .\data\gdelt\SNAPSHOT.ngrams.txt.gz --toc .\data\gdelt\SNAPSHOT.toc.json.gz --query "climate change" --language en --limit 100
+~~~
+
+Replace `SNAPSHOT` with the shared timestamp in both filenames.
 
 ## Optional submission to Rewide Machine
 
