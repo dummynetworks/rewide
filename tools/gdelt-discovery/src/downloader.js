@@ -126,7 +126,13 @@ export async function downloadLatestSnapshot({
     }
 
     const tocUrl = BASE_URL + '/' + stamp + '.toc.json.gz';
-    const tocResponse = await getFile(fetcher, tocUrl);
+    let tocResponse;
+    try {
+      tocResponse = await getFile(fetcher, tocUrl);
+    } catch (error) {
+      await removeQuietly(ngramsTemp);
+      throw error;
+    }
     if (!tocResponse) {
       await removeQuietly(ngramsTemp);
       continue;
