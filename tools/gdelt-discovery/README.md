@@ -43,6 +43,20 @@ npm run discover:gdelt -- --ngrams .\data\gdelt\SNAPSHOT.ngrams.txt.gz --toc .\d
 
 Replace `SNAPSHOT` with the shared timestamp in both filenames.
 
+## URL validation and rejected-record diagnostics
+
+The scanner does not repair suspicious source URLs. It rejects URL strings that contain raw whitespace/control characters or patterns that look like HTML attributes appended to a URL, including encoded forms such as `%20class=`, `%20href=` and `%20src=`. Rejected values are never shortened into a guessed URL.
+
+To preserve the original URL and its rejection reason, add `--rejected-output`:
+
+~~~powershell
+npm run discover:gdelt -- --ngrams .\data\gdelt\20261115094700.ngrams.txt.gz --toc .\data\gdelt\20261115094700.toc.json.gz --query "climate" --language en --limit 100 --output .\data\gdelt\climate.ndjson --rejected-output .\data\gdelt\climate-rejected.ndjson
+~~~
+
+Each rejected-record line contains the matching document ID, title, original URL (capped at 4096 characters with a truncation flag), a stable reason code, and the GDELT TOC date. The scan summary also reports rejection counts grouped by reason. Reason codes include `embedded_html_attribute`, `url_contains_whitespace_or_control`, `url_too_long`, `unsupported_protocol`, `url_credentials_not_allowed`, and `malformed_url`.
+
+Candidate records use schema version 2. `sourceTimestamp` is the timestamp encoded in the downloaded snapshot filename; `gdeltRecordDate` is the date supplied by the matching GDELT TOC row. Do not assume `gdeltRecordDate` is the publisher's original publication date.
+
 ## Optional submission to Rewide Machine
 
 The default scan is read-only and offline. To enqueue selected URLs for Rewide's crawler, add --submit and set the same DUMMYNET_TOKEN secret used by the Worker:
