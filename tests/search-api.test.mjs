@@ -14,7 +14,7 @@ function makeEvent(query, database, fetcher, crawlerEnv = {}) {
   };
 }
 
-function createDatabase(rows = []) {
+function createDatabase(rows = [], discoveredRows = []) {
   const calls = [];
   return {
     calls,
@@ -24,7 +24,7 @@ function createDatabase(rows = []) {
           calls.push({ sql, values });
           return {
             async all() {
-              return { results: rows };
+              return { results: sql.includes('discovered_urls_fts') ? discoveredRows : rows };
             },
           };
         },
@@ -87,9 +87,47 @@ test('queries indexed documents with safely quoted AND terms', async () => {
   assert.equal(body.count, 1);
   assert.equal(body.results[0].position, 1);
   assert.equal(body.results[0].title, 'Example Domain');
-  assert.equal(database.calls.length, 1);
+  assert.equal(database.calls.length, 2);
   assert.match(database.calls[0].sql, /documents_fts MATCH \?/);
   assert.deepEqual(database.calls[0].values, ['"example" AND "domain"', 10]);
+  assert.match(database.calls[1].sql, /discovered_urls_fts MATCH \?/);
+  assert.match(database.calls[1].sql, /noindex_status IN \('unknown', 'indexable'\)/);
+  assert.match(database.calls[1].sql, /COALESCE\(discovered_urls\.resolved_url, discovered_urls\.url\)/);
+});
+
+test('returns discovered URLs without treating UNKNOWN as confirmed indexable', async () => {
+  const database = createDatabase([], [{
+    url: 'https://example.com/private',
+    title: '',
+    description: '',
+    snippet: 'Private documentation',
+    sourceUrl: 'https://example.com/',
+    discoveredAt: '2026-11-14T00:00:00.000Z',
+    indexStatus: 'unknown',
+    relevance: -2,
+  }]);
+  let crawlerCalled = false;
+  const fetcher = async () => {
+    crawlerCalled = true;
+    throw new Error('A discovered-only URL must not be automatically recrawled.');
+  };
+
+  const response = await GET(makeEvent('private documentation', database, fetcher, {
+    REWIDE_CRAWLER_TOKEN: 'test-crawler-token-that-is-at-least-24-chars',
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.count, 1);
+  assert.equal(body.results[0].url, 'https://example.com/private');
+  assert.equal(body.results[0].title, 'https://example.com/private');
+  assert.equal(body.results[0].resultType, 'discovered');
+  assert.equal(body.results[0].indexStatus, 'UNKNOWN');
+  assert.equal(body.results[0].fetchedAt, null);
+  assert.equal(body.results[0].sourceUrl, 'https://example.com/');
+  assert.equal(body.crawl.enabled, true);
+  assert.equal(body.crawl.requested, 0);
+  assert.equal(crawlerCalled, false);
 });
 
 test('treats FTS operators as literal search terms', async () => {
