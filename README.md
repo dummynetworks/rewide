@@ -91,7 +91,7 @@ The search endpoint returns a `pollUrl` while crawl jobs are queued. The website
 
 ### Optional offline GDELT news discovery
 
-Rewide includes an optional local importer for GDELT Web NGrams quadgram snapshots. It scans a matching NGRAMS/TOC file pair on the developer's machine and extracts candidate news URLs for a one-to-four-word phrase. It does not call a GDELT search API, download files automatically, or connect itself to the public search request path.
+Rewide includes an optional CLI importer for GDELT Web NGrams quadgram snapshots. The explicit `--latest` mode probes recent timestamps and downloads a matching NGRAMS/TOC file pair; the scanner then extracts candidate news URLs for a one-to-four-word phrase. It does not call a GDELT search API or connect itself to the public search request path.
 
 The importer can optionally submit selected URL candidates to the existing Rewide Machine Worker. The Worker remains responsible for URL validation, robots.txt, noindex, TTL, retry cooldowns, and fetching the original pages. Only Rewide-fetched documents become normal search results.
 
