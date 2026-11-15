@@ -93,6 +93,7 @@ test('queries indexed documents with safely quoted AND terms', async () => {
   assert.match(database.calls[1].sql, /discovered_urls_fts MATCH \?/);
   assert.match(database.calls[1].sql, /noindex_status IN \('unknown', 'indexable'\)/);
   assert.match(database.calls[1].sql, /COALESCE\(discovered_urls\.resolved_url, discovered_urls\.url\)/);
+  assert.match(database.calls[1].sql, /documents\.no_index = 1/);
 });
 
 test('returns discovered URLs without treating UNKNOWN as confirmed indexable', async () => {
@@ -128,6 +129,29 @@ test('returns discovered URLs without treating UNKNOWN as confirmed indexable', 
   assert.equal(body.crawl.enabled, true);
   assert.equal(body.crawl.requested, 0);
   assert.equal(crawlerCalled, false);
+});
+
+test('keeps matching referring-link text when the fetched target document does not match', async () => {
+  const database = createDatabase([], [{
+    url: 'https://example.com/private',
+    title: '',
+    description: '',
+    snippet: 'Architecture reference',
+    sourceUrl: 'https://example.com/',
+    resolvedUrl: 'https://example.com/private/index.html',
+    discoveredAt: '2026-11-14T00:00:00.000Z',
+    indexStatus: 'unknown',
+    relevance: -1,
+  }]);
+
+  const response = await GET(makeEvent('architecture reference', database));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.count, 1);
+  assert.equal(body.results[0].url, 'https://example.com/private');
+  assert.equal(body.results[0].resultType, 'discovered');
+  assert.equal(body.results[0].indexStatus, 'UNKNOWN');
 });
 
 test('treats FTS operators as literal search terms', async () => {

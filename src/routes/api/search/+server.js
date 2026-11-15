@@ -106,6 +106,7 @@ export async function GET({ url, platform, fetch }) {
           discovered_urls.description AS description,
           snippet(discovered_urls_fts, 3, '', '', ' … ', 24) AS snippet,
           discovered_urls.source_url AS sourceUrl,
+          discovered_urls.resolved_url AS resolvedUrl,
           discovered_urls.discovered_at AS discoveredAt,
           discovered_urls.noindex_status AS indexStatus,
           bm25(discovered_urls_fts, 2.0, 5.0, 2.0, 8.0) AS relevance
@@ -118,6 +119,7 @@ export async function GET({ url, platform, fetch }) {
             SELECT 1
             FROM documents
             WHERE documents.url = COALESCE(discovered_urls.resolved_url, discovered_urls.url)
+              AND documents.no_index = 1
           )
         ORDER BY relevance ASC, discovered_urls.discovered_at DESC
         LIMIT ?
@@ -125,7 +127,14 @@ export async function GET({ url, platform, fetch }) {
     ]);
 
     const documentRows = Array.isArray(documentResult?.results) ? documentResult.results : [];
-    const discoveryRows = Array.isArray(discoveryResult?.results) ? discoveryResult.results : [];
+    const matchedDocumentUrls = new Set(
+      documentRows.flatMap((row) => [row.url, row.canonicalUrl].filter(Boolean)),
+    );
+    const discoveryRows = (Array.isArray(discoveryResult?.results) ? discoveryResult.results : [])
+      .filter((row) => (
+        !matchedDocumentUrls.has(row.url)
+        && !matchedDocumentUrls.has(row.resolvedUrl)
+      ));
     const rankedRows = [
       ...documentRows.map((row, index) => ({
         ...row,
