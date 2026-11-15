@@ -15,6 +15,7 @@ function usage() {
     '  --language CODE       Optional GDELT language code, e.g. en or ko',
     '  --limit NUMBER        Maximum candidate URLs (default: 100, max: 1000)',
     '  --output FILE         Write candidate JSONL to a file (default: stdout)',
+    '  --rejected-output FILE Write rejected URL diagnostics as JSONL',
     '  --latest              Find and download the newest complete GDELT file pair',
     '  --data-dir DIRECTORY  Download directory for --latest (default: data/gdelt)',
     '  --lookback-minutes N  Search recent timestamps (default: 30, max: 180)',
@@ -39,6 +40,7 @@ function readOptions(args) {
     '--language',
     '--limit',
     '--output',
+    '--rejected-output',
     '--submit-limit',
     '--delay-ms',
     '--endpoint',
@@ -116,6 +118,26 @@ async function main() {
     limit: parseNumber(options.limit, 100, 'limit', 1, 1000),
   });
 
+  const resolvedOutputPath = options.output ? resolve(options.output) : null;
+  const resolvedRejectedOutputPath = options.rejected_output ? resolve(options.rejected_output) : null;
+  if (
+    resolvedOutputPath
+    && resolvedRejectedOutputPath
+    && resolvedOutputPath.toLowerCase() === resolvedRejectedOutputPath.toLowerCase()
+  ) {
+    throw new Error('--output and --rejected-output must use different files.');
+  }
+
+  if (resolvedRejectedOutputPath) {
+    const rejectedJsonl = result.rejectedUrls
+      .map((record) => JSON.stringify(record))
+      .join('\n');
+    const rejectedOutput = rejectedJsonl ? rejectedJsonl + '\n' : '';
+    await mkdir(dirname(resolvedRejectedOutputPath), { recursive: true });
+    await writeFile(resolvedRejectedOutputPath, rejectedOutput, 'utf8');
+    process.stderr.write('Rejected URL diagnostics written: ' + resolvedRejectedOutputPath + '\n');
+  }
+
   const jsonl = result.candidates.map((candidate) => JSON.stringify(candidate)).join('\n');
   const output = jsonl ? jsonl + '\n' : '';
 
@@ -129,6 +151,9 @@ async function main() {
   }
 
   process.stderr.write('Scan summary: ' + JSON.stringify(result.stats) + '\n');
+  if (result.rejectedUrls.length > 0 && !resolvedRejectedOutputPath) {
+    process.stderr.write('Rejected URL records: ' + result.rejectedUrls.length + ' (use --rejected-output FILE to preserve details)\n');
+  }
 
   if (!options.submit) return;
 
