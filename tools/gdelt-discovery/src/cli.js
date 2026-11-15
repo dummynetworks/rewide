@@ -8,6 +8,7 @@ import { downloadLatestSnapshot } from './downloader.js';
 function usage() {
   return [
     'Usage:',
+    '  node tools/gdelt-discovery/src/cli.js --latest --query TEXT [options]',
     '  node tools/gdelt-discovery/src/cli.js --ngrams FILE --toc FILE --query TEXT [options]',
     '',
     'Options:',
@@ -23,7 +24,7 @@ function usage() {
     '  --endpoint URL        Rewide Machine HTTPS base URL',
     '  --help                Show this help',
     '',
-    'The scanner reads local files only. It does not call GDELT APIs or download data.',
+    'The scanner reads local files. --latest downloads the newest complete public data-file pair; no search API or API key is used.',
   ].join('\n') + '\n';
 }
 
@@ -101,7 +102,7 @@ async function main() {
     tocPath = downloaded.tocPath;
     process.stderr.write(
       'Downloaded ' + downloaded.source + ' snapshot ' + downloaded.stamp
-      + ' after ' + downloaded.attempts + ' timestamp attempt(s).\\n',
+      + ' after ' + downloaded.attempts + ' timestamp attempt(s).\n',
     );
   } else if (!ngramsPath || !tocPath) {
     throw new Error('Provide both --ngrams and --toc, or use --latest.');
