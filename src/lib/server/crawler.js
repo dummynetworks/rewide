@@ -71,6 +71,7 @@ export async function requestSearchCrawls({
     fresh: 0,
     queued: 0,
     deduplicated: 0,
+    cooldown: 0,
     failed: 0,
   };
 
@@ -93,7 +94,9 @@ export async function requestSearchCrawls({
 
       if (response.status === 200) {
         const payload = await response.json().catch(() => null);
-        return payload?.status === 'fresh' ? 'fresh' : 'failed';
+        if (payload?.status === 'fresh') return 'fresh';
+        if (payload?.status === 'cooldown') return 'cooldown';
+        return 'failed';
       }
 
       if (response.status === 202) {
