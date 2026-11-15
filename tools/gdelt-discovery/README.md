@@ -15,16 +15,45 @@ GDELT's documentation says the quadgram files contain frequency histograms, not 
 
 ## Download one snapshot
 
-Choose an actually available UTC timestamp. GDELT publishes files shortly after their observation minute and recommends looking several minutes back; its legacy processing cadence can also produce batches around a 15-minute heartbeat.
-
-PowerShell example (replace the timestamp with one confirmed to exist):
+GDELT recommends requesting a timestamp several minutes in the past. Its legacy processing has a 15-minute heartbeat and publishes short bursts of minute-stamped files. The following PowerShell 7 example selects a conservative timestamp from the latest expected publishing window, then downloads both files using the **same** timestamp:
 
 ~~~powershell
-$stamp = "YYYYMMDDHHMMSS"
+$ErrorActionPreference = "Stop"
+
 $base = "https://data.gdeltproject.org/gdeltv5/weblegacy/ngrams"
-curl.exe -fL "$base/$stamp.ngrams.txt.gz" -o "$stamp.ngrams.txt.gz"
-curl.exe -fL "$base/$stamp.toc.json.gz" -o "$stamp.toc.json.gz"
+$now = [DateTimeOffset]::UtcNow.AddMinutes(-5)
+$minuteInCycle = $now.Minute % 15
+
+# Expected publication bursts cover minutes 00-04, 15-19, 30-34, and 45-49.
+# If the five-minute look-back lands outside a burst, use the previous burst's last minute.
+if ($minuteInCycle -gt 4) {
+    $now = $now.AddMinutes(-($minuteInCycle - 4))
+}
+
+$stamp = $now.ToString("yyyyMMddHHmm") + "00"
+$directory = Join-Path (Get-Location) "data/gdelt"
+New-Item -ItemType Directory -Force -Path $directory | Out-Null
+
+$ngrams = Join-Path $directory "$stamp.ngrams.txt.gz"
+$toc = Join-Path $directory "$stamp.toc.json.gz"
+
+curl.exe -fL --silent --show-error "$base/$stamp.ngrams.txt.gz" -o $ngrams
+if ($LASTEXITCODE -ne 0) {
+    throw "GDELT NGRAMS download failed for $stamp."
+}
+
+curl.exe -fL --silent --show-error "$base/$stamp.toc.json.gz" -o $toc
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item $ngrams -Force -ErrorAction SilentlyContinue
+    throw "GDELT TOC download failed for $stamp. Retry later; do not mix timestamps."
+}
+
+Write-Host "Downloaded matching GDELT snapshot: $stamp"
+Write-Host "NGRAMS: $ngrams"
+Write-Host "TOC:    $toc"
 ~~~
+
+If the source has not published that pair yet, rerun the block a little later. Do not combine an NGRAMS file with a TOC file carrying a different timestamp. You do **not** need to unzip the files: the scanner reads both gzip files directly.
 
 The source URLs are direct public data-file URLs, not API endpoints. The upstream server may still impose operational controls or become unavailable; this project does not claim unlimited bandwidth or service availability.
 
